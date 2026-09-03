@@ -1,18 +1,16 @@
 import { z } from "zod";
 import { getSupabase } from "@/lib/supabase/client";
-import { EXPENSE_CATEGORIES } from "@/lib/expenses";
-import { PAYMENT_METHODS } from "@/lib/payments";
 
 export const FREQUENCIES = ["Monthly", "Quarterly", "Yearly"] as const;
 
 export const recurringSchema = z.object({
-  name: z.string().min(1, "Name is required").max(120),
-  category: z.enum(EXPENSE_CATEGORIES),
+  name: z.string().min(1, "Name is required").max(150),
+  category: z.string().min(1, "Category is required"),
   vendor: z.string().max(200).optional().or(z.literal("")),
   amount: z.number({ error: "Enter an amount" }).positive("Must be greater than 0"),
-  frequency: z.enum(FREQUENCIES),
-  next_payment_date: z.string().min(1, "Select the next payment date"),
-  payment_method: z.enum(PAYMENT_METHODS),
+  frequency: z.enum(["Monthly", "Quarterly", "Yearly"]),
+  next_payment_date: z.string().min(1, "Date is required"),
+  payment_method: z.string().min(1, "Select a payment method"),
   active: z.boolean(),
   notes: z.string().max(1000).optional().or(z.literal("")),
 });

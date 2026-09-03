@@ -56,9 +56,10 @@ import {
 import { PageHeader } from "@/components/page-header";
 import { MetricCard } from "@/components/metric-card";
 import { PaymentForm } from "@/components/payment-form";
-import { listPayments, deletePayment, PAYMENT_METHODS, type PaymentWithClient } from "@/lib/payments";
+import { listPayments, deletePayment, type PaymentWithClient } from "@/lib/payments";
 import { listClients, type ClientSummary } from "@/lib/clients";
 import { formatINR, formatDate } from "@/lib/format";
+import { useSettings } from "@/components/settings-provider";
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<PaymentWithClient[]>([]);
@@ -71,6 +72,9 @@ export default function PaymentsPage() {
   const [client, setClient] = useState("all");
   const [method, setMethod] = useState("all");
   const [sort, setSort] = useState("newest");
+
+  const { settings } = useSettings();
+  const paymentMethods = settings?.payment_methods || [];
 
   const [editing, setEditing] = useState<PaymentWithClient | null>(null);
   const [deleting, setDeleting] = useState<PaymentWithClient | null>(null);
@@ -125,6 +129,16 @@ export default function PaymentsPage() {
         : a.payment_date.localeCompare(b.payment_date),
     );
   }, [payments, query, month, client, method, sort]);
+
+  const hasFilters = query !== "" || month !== "" || client !== "all" || method !== "all" || sort !== "newest";
+
+  function resetFilters() {
+    setQuery("");
+    setMonth("");
+    setClient("all");
+    setMethod("all");
+    setSort("newest");
+  }
 
   async function confirmDelete() {
     if (!deleting) return;
@@ -190,7 +204,7 @@ export default function PaymentsPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All methods</SelectItem>
-            {PAYMENT_METHODS.map((m) => (
+            {paymentMethods.map((m) => (
               <SelectItem key={m} value={m}>
                 {m}
               </SelectItem>
@@ -206,6 +220,16 @@ export default function PaymentsPage() {
             <SelectItem value="oldest">Date: Oldest</SelectItem>
           </SelectContent>
         </Select>
+        {hasFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={resetFilters}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            Reset
+          </Button>
+        )}
       </div>
 
       {error && (

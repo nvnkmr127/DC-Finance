@@ -6,6 +6,9 @@ import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Input } from "@/components/ui/input";
+import { Search } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -76,6 +79,42 @@ export default function SalariesPage() {
   useEffect(() => {
     refetch();
   }, []);
+
+  const [empSearch, setEmpSearch] = useState("");
+  const [empStatus, setEmpStatus] = useState("all");
+
+  const filteredEmployees = useMemo(() => {
+    const q = empSearch.trim().toLowerCase();
+    return employees.filter((e) => {
+      const matchesSearch = !q || e.name.toLowerCase().includes(q) || e.designation.toLowerCase().includes(q);
+      const matchesStatus = empStatus === "all" || e.status === empStatus;
+      return matchesSearch && matchesStatus;
+    });
+  }, [employees, empSearch, empStatus]);
+
+  const hasEmpFilters = empSearch !== "" || empStatus !== "all";
+  function resetEmpFilters() {
+    setEmpSearch("");
+    setEmpStatus("all");
+  }
+
+  const [paySearch, setPaySearch] = useState("");
+  const [payMonth, setPayMonth] = useState("");
+
+  const filteredPayments = useMemo(() => {
+    const q = paySearch.trim().toLowerCase();
+    return payments.filter((p) => {
+      const matchesSearch = !q || p.employees?.name.toLowerCase().includes(q) || (p.notes && p.notes.toLowerCase().includes(q));
+      const matchesMonth = !payMonth || p.payment_date.startsWith(payMonth);
+      return matchesSearch && matchesMonth;
+    });
+  }, [payments, paySearch, payMonth]);
+
+  const hasPayFilters = paySearch !== "" || payMonth !== "";
+  function resetPayFilters() {
+    setPaySearch("");
+    setPayMonth("");
+  }
 
   const activeEmployees = useMemo(
     () => employees.filter((e) => e.status === "active"),
@@ -173,7 +212,38 @@ export default function SalariesPage() {
 
         {/* Employees */}
         <TabsContent value="employees" className="space-y-4">
-          <div className="flex justify-end">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative sm:max-w-xs sm:flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={empSearch}
+                  onChange={(e) => setEmpSearch(e.target.value)}
+                  placeholder="Search employees…"
+                  className="pl-9"
+                />
+              </div>
+              <Select value={empStatus} onValueChange={setEmpStatus}>
+                <SelectTrigger className="sm:w-44">
+                  <SelectValue placeholder="All statuses" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+              {hasEmpFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={resetEmpFilters}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Reset
+                </Button>
+              )}
+            </div>
             <EmployeeForm showTrigger onSaved={refetch} />
           </div>
           <div className="rounded-lg border bg-card">
@@ -194,14 +264,14 @@ export default function SalariesPage() {
                       <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
                     </TableCell>
                   </TableRow>
-                ) : employees.length === 0 ? (
+                ) : filteredEmployees.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={5} className="h-32 text-center text-sm text-muted-foreground">
-                      No employees yet
+                      No employees found
                     </TableCell>
                   </TableRow>
                 ) : (
-                  employees.map((e) => (
+                  filteredEmployees.map((e) => (
                     <TableRow key={e.id} className={cn(e.status !== "active" && "opacity-60")}>
                       <TableCell className="font-medium">{e.name}</TableCell>
                       <TableCell className="text-muted-foreground">{e.designation}</TableCell>
@@ -245,7 +315,35 @@ export default function SalariesPage() {
 
         {/* Salary payments */}
         <TabsContent value="payments" className="space-y-4">
-          <div className="flex justify-end">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+              <div className="relative sm:max-w-xs sm:flex-1">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={paySearch}
+                  onChange={(e) => setPaySearch(e.target.value)}
+                  placeholder="Search payments…"
+                  className="pl-9"
+                />
+              </div>
+              <Input
+                type="month"
+                value={payMonth}
+                onChange={(e) => setPayMonth(e.target.value)}
+                className="sm:w-40"
+                aria-label="Filter by month"
+              />
+              {hasPayFilters && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={resetPayFilters}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  Reset
+                </Button>
+              )}
+            </div>
             <SalaryPaymentForm showTrigger employees={activeEmployees} onSaved={refetch} />
           </div>
           <div className="rounded-lg border bg-card">
@@ -268,14 +366,14 @@ export default function SalariesPage() {
                       <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
                     </TableCell>
                   </TableRow>
-                ) : payments.length === 0 ? (
+                ) : filteredPayments.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={7} className="h-32 text-center text-sm text-muted-foreground">
-                      No salary payments yet
+                      No salary payments found
                     </TableCell>
                   </TableRow>
                 ) : (
-                  payments.map((p) => (
+                  filteredPayments.map((p) => (
                     <TableRow key={p.id}>
                       <TableCell className="font-medium">{p.employees?.name ?? "Unknown"}</TableCell>
                       <TableCell className="text-muted-foreground">{formatDate(p.payment_date)}</TableCell>

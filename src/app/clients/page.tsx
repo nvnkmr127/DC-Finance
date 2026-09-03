@@ -107,7 +107,7 @@ export default function ClientsPage() {
       const matchesQuery =
         !q ||
         [c.name, c.company, c.service, c.email].some((v) =>
-          v.toLowerCase().includes(q),
+          v?.toLowerCase().includes(q),
         );
       const matchesStatus = status === "all" || c.status === status;
       return matchesQuery && matchesStatus;
@@ -118,6 +118,14 @@ export default function ClientsPage() {
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
   const paged = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const hasFilters = query !== "" || status !== "all" || sort !== "recent";
+
+  function resetFilters() {
+    setQuery("");
+    setStatus("all");
+    setSort("recent");
+  }
 
   const blockedByPayments = (deleting?.payment_count ?? 0) > 0;
 
@@ -174,6 +182,16 @@ export default function ClientsPage() {
             <SelectItem value="outstanding">Sort: Outstanding</SelectItem>
           </SelectContent>
         </Select>
+        {hasFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={resetFilters}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            Reset
+          </Button>
+        )}
       </div>
 
       {error && (

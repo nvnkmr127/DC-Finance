@@ -1,27 +1,13 @@
 import { z } from "zod";
 import { getSupabase } from "@/lib/supabase/client";
-import { PAYMENT_METHODS } from "@/lib/payments";
-
-export const EXPENSE_CATEGORIES = [
-  "Office",
-  "Software",
-  "Advertising",
-  "Equipment",
-  "Travel",
-  "Internet",
-  "Electricity",
-  "Freelancers",
-  "Salary",
-  "Other",
-] as const;
 
 export const expenseSchema = z.object({
-  category: z.enum(EXPENSE_CATEGORIES),
+  category: z.string().min(1, "Category is required"),
   description: z.string().min(1, "Description is required").max(200),
   vendor: z.string().max(200).optional().or(z.literal("")),
   amount: z.number({ error: "Enter an amount" }).positive("Must be greater than 0"),
   expense_date: z.string().min(1, "Select an expense date"),
-  payment_method: z.enum(PAYMENT_METHODS),
+  payment_method: z.string().min(1, "Select a payment method"),
   recurring: z.boolean(),
   notes: z.string().max(1000).optional().or(z.literal("")),
 });

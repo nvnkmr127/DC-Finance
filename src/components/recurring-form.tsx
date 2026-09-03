@@ -28,8 +28,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, MoneyInput } from "@/components/form-field";
-import { EXPENSE_CATEGORIES } from "@/lib/expenses";
-import { PAYMENT_METHODS } from "@/lib/payments";
 import {
   recurringSchema,
   createRecurring,
@@ -39,6 +37,7 @@ import {
   type RecurringInput,
   type Recurring,
 } from "@/lib/recurring";
+import { useSettings } from "@/components/settings-provider";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -68,6 +67,9 @@ export function RecurringForm({
   showTrigger?: boolean;
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
+  const { settings } = useSettings();
+  const expenseCategories = settings?.expense_categories || [];
+  const paymentMethods = settings?.payment_methods || [];
   const controlled = open !== undefined;
   const isOpen = controlled ? open : internalOpen;
   const setOpen = controlled ? onOpenChange! : setInternalOpen;
@@ -166,12 +168,12 @@ export function RecurringForm({
                         <SelectValue placeholder="Category" />
                       </SelectTrigger>
                       <SelectContent>
-                        {EXPENSE_CATEGORIES.map((c) => (
-                          <SelectItem key={c} value={c}>
-                            {c}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
+                      {expenseCategories.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                     </Select>
                   )}
                 />
@@ -254,12 +256,12 @@ export function RecurringForm({
                         <SelectValue placeholder="Method" />
                       </SelectTrigger>
                       <SelectContent>
-                        {PAYMENT_METHODS.map((m) => (
-                          <SelectItem key={m} value={m}>
-                            {m}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
+                      {paymentMethods.map((m) => (
+                        <SelectItem key={m} value={m}>
+                          {m}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
                     </Select>
                   )}
                 />

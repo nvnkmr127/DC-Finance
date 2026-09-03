@@ -1,19 +1,11 @@
 import { z } from "zod";
 import { getSupabase } from "@/lib/supabase/client";
 
-export const PAYMENT_METHODS = [
-  "Bank Transfer",
-  "UPI",
-  "Cash",
-  "Card",
-  "Other",
-] as const;
-
 export const paymentSchema = z.object({
   client_id: z.string().min(1, "Select a client"),
   amount: z.number({ error: "Enter an amount" }).positive("Must be greater than 0"),
   payment_date: z.string().min(1, "Select a payment date"),
-  payment_method: z.enum(PAYMENT_METHODS),
+  payment_method: z.string().min(1, "Select a payment method"),
   reference_number: z.string().max(100).optional().or(z.literal("")),
   notes: z.string().max(1000).optional().or(z.literal("")),
 });

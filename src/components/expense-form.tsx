@@ -28,15 +28,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, MoneyInput } from "@/components/form-field";
-import { PAYMENT_METHODS } from "@/lib/payments";
 import {
   expenseSchema,
   createExpense,
   updateExpense,
-  EXPENSE_CATEGORIES,
   type ExpenseInput,
   type Expense,
 } from "@/lib/expenses";
+import { useSettings } from "@/components/settings-provider";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -65,6 +64,9 @@ export function ExpenseForm({
   showTrigger?: boolean;
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
+  const { settings } = useSettings();
+  const expenseCategories = settings?.expense_categories || [];
+  const paymentMethods = settings?.payment_methods || [];
   const controlled = open !== undefined;
   const isOpen = controlled ? open : internalOpen;
   const setOpen = controlled ? onOpenChange! : setInternalOpen;
@@ -143,7 +145,7 @@ export function ExpenseForm({
                       <SelectValue placeholder="Select category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {EXPENSE_CATEGORIES.map((c) => (
+                      {expenseCategories.map((c) => (
                         <SelectItem key={c} value={c}>
                           {c}
                         </SelectItem>
@@ -181,7 +183,7 @@ export function ExpenseForm({
                       <SelectValue placeholder="Select method" />
                     </SelectTrigger>
                     <SelectContent>
-                      {PAYMENT_METHODS.map((m) => (
+                      {paymentMethods.map((m) => (
                         <SelectItem key={m} value={m}>
                           {m}
                         </SelectItem>

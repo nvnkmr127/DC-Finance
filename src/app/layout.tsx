@@ -21,6 +21,8 @@ export const metadata: Metadata = {
   description: "Internal finance dashboard for Digicloudify",
 };
 
+import { SettingsProvider } from "@/components/settings-provider";
+
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
@@ -36,14 +38,16 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         />
       </head>
       <body className="min-h-full">
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <div className="flex min-w-0 flex-1 flex-col">
-            <Topbar />
-            <main className="flex-1 bg-muted/30 p-4 sm:p-6 lg:p-8">{children}</main>
+        <SettingsProvider>
+          <div className="flex min-h-screen">
+            <Sidebar />
+            <div className="flex min-w-0 flex-1 flex-col">
+              <Topbar />
+              <main className="flex-1 bg-muted/30 p-4 sm:p-6 lg:p-8">{children}</main>
+            </div>
           </div>
-        </div>
-        <Toaster />
+          <Toaster />
+        </SettingsProvider>
       </body>
     </html>
   );

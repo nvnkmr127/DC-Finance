@@ -44,11 +44,10 @@ import { ExpenseForm } from "@/components/expense-form";
 import {
   listExpenses,
   deleteExpense,
-  EXPENSE_CATEGORIES,
   type Expense,
 } from "@/lib/expenses";
-import { PAYMENT_METHODS } from "@/lib/payments";
 import { formatINR, formatDate } from "@/lib/format";
+import { useSettings } from "@/components/settings-provider";
 
 export default function ExpensesPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -63,6 +62,10 @@ export default function ExpensesPage() {
 
   const [editing, setEditing] = useState<Expense | null>(null);
   const [deleting, setDeleting] = useState<Expense | null>(null);
+
+  const { settings } = useSettings();
+  const expenseCategories = settings?.expense_categories || [];
+  const paymentMethods = settings?.payment_methods || [];
 
   async function refetch() {
     setError(null);
@@ -190,7 +193,7 @@ export default function ExpensesPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All categories</SelectItem>
-            {EXPENSE_CATEGORIES.map((c) => (
+            {expenseCategories.map((c) => (
               <SelectItem key={c} value={c}>
                 {c}
               </SelectItem>
@@ -212,7 +215,7 @@ export default function ExpensesPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All methods</SelectItem>
-            {PAYMENT_METHODS.map((m) => (
+            {paymentMethods.map((m) => (
               <SelectItem key={m} value={m}>
                 {m}
               </SelectItem>

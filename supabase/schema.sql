@@ -33,8 +33,7 @@ create table if not exists public.payments (
   client_id      uuid not null references public.clients(id) on delete restrict,
   amount         numeric not null default 0,
   payment_date   date not null default now(),
-  payment_method text not null default 'Bank Transfer'
-                 check (payment_method in ('Bank Transfer', 'UPI', 'Cash', 'Card', 'Other')),
+  payment_method text not null default 'Bank Transfer',
   reference_number text,
   notes          text,
   created_at     timestamptz not null default now(),
@@ -43,15 +42,12 @@ create table if not exists public.payments (
 
 create table if not exists public.expenses (
   id             uuid primary key default gen_random_uuid(),
-  category       text not null default 'Other'
-                 check (category in ('Office', 'Software', 'Advertising', 'Equipment',
-                                     'Travel', 'Internet', 'Electricity', 'Freelancers', 'Salary', 'Other')),
+  category       text not null default 'Other',
   description    text not null,
   vendor         text,
   amount         numeric not null default 0,
   expense_date   date not null default now(),
-  payment_method text not null default 'Bank Transfer'
-                 check (payment_method in ('Bank Transfer', 'UPI', 'Cash', 'Card', 'Other')),
+  payment_method text not null default 'Bank Transfer',
   recurring      boolean not null default false,
   notes          text,
   created_at     timestamptz not null default now(),
@@ -61,16 +57,13 @@ create table if not exists public.expenses (
 create table if not exists public.recurring (
   id                uuid primary key default gen_random_uuid(),
   name              text not null,
-  category          text not null default 'Other'
-                    check (category in ('Office', 'Software', 'Advertising', 'Equipment',
-                                        'Travel', 'Internet', 'Electricity', 'Freelancers', 'Salary', 'Other')),
+  category          text not null default 'Other',
   vendor            text,
   amount            numeric not null default 0,
   frequency         text not null default 'Monthly'
                     check (frequency in ('Monthly', 'Quarterly', 'Yearly')),
   next_payment_date date not null default now(),
-  payment_method    text not null default 'Bank Transfer'
-                    check (payment_method in ('Bank Transfer', 'UPI', 'Cash', 'Card', 'Other')),
+  payment_method    text not null default 'Bank Transfer',
   active            boolean not null default true,
   notes             text,
   created_at        timestamptz not null default now(),
@@ -89,6 +82,26 @@ create table if not exists public.salary_payments (
   updated_at   timestamptz not null default now()
 );
 
+create table if not exists public.opening_balances (
+  month        text primary key, -- Format: YYYY-MM
+  balance      numeric not null default 0,
+  created_at   timestamptz not null default now(),
+  updated_at   timestamptz not null default now()
+);
+
+create table if not exists public.settings (
+  id                     integer primary key check (id = 1),
+  company_name           text not null default 'Digicloudify Finance',
+  company_logo           text,
+  global_opening_balance numeric not null default 0,
+  default_currency       text not null default 'INR',
+  financial_year_start   text not null default '04-01',
+  expense_categories     text[] not null default array['Office', 'Software', 'Advertising', 'Equipment', 'Travel', 'Internet', 'Electricity', 'Freelancers', 'Salary', 'Other'],
+  payment_methods        text[] not null default array['Bank Transfer', 'UPI', 'Cash', 'Card', 'Other'],
+  created_at             timestamptz not null default now(),
+  updated_at             timestamptz not null default now()
+);
+
 -- ---- updated_at auto-touch ----------------------------------------------
 
 create or replace function public.set_updated_at()
@@ -102,7 +115,7 @@ $$;
 do $$
 declare t text;
 begin
-  foreach t in array array['clients','employees','payments','expenses','recurring','salary_payments']
+  foreach t in array array['clients','employees','payments','expenses','recurring','salary_payments','opening_balances','settings']
   loop
     execute format('drop trigger if exists set_updated_at on public.%I', t);
     execute format(
@@ -151,6 +164,8 @@ alter table public.payments        enable row level security;
 alter table public.expenses        enable row level security;
 alter table public.recurring       enable row level security;
 alter table public.salary_payments enable row level security;
+alter table public.opening_balances enable row level security;
+alter table public.settings        enable row level security;
 
 drop policy if exists "clients anon all"   on public.clients;
 drop policy if exists "employees anon all" on public.employees;
@@ -158,12 +173,16 @@ drop policy if exists "payments anon all"  on public.payments;
 drop policy if exists "expenses anon all"  on public.expenses;
 drop policy if exists "recurring anon all" on public.recurring;
 drop policy if exists "salary anon all"    on public.salary_payments;
+drop policy if exists "balances anon all"  on public.opening_balances;
+drop policy if exists "settings anon all"  on public.settings;
 create policy "clients anon all"   on public.clients         for all to anon using (true) with check (true);
 create policy "employees anon all" on public.employees       for all to anon using (true) with check (true);
 create policy "payments anon all"  on public.payments        for all to anon using (true) with check (true);
 create policy "expenses anon all"  on public.expenses        for all to anon using (true) with check (true);
 create policy "recurring anon all" on public.recurring       for all to anon using (true) with check (true);
 create policy "salary anon all"    on public.salary_payments for all to anon using (true) with check (true);
+create policy "balances anon all"  on public.opening_balances for all to anon using (true) with check (true);
+create policy "settings anon all"  on public.settings        for all to anon using (true) with check (true);
 
 grant usage on schema public to anon;
 grant all on public.clients         to anon;
@@ -172,9 +191,13 @@ grant all on public.payments        to anon;
 grant all on public.expenses        to anon;
 grant all on public.recurring       to anon;
 grant all on public.salary_payments to anon;
+grant all on public.opening_balances to anon;
+grant all on public.settings         to anon;
 grant select on public.client_summary to anon;
 
 -- ---- Seed data -----------------------------------------------------------
+
+insert into public.settings (id) values (1) on conflict do nothing;
 
 insert into public.clients (name, company, phone, email, service, monthly_value, status, notes) values
   ('Aarav Mehta',  'Aarav Retail Pvt Ltd', '+91 98200 11223', 'aarav@aaravretail.in', 'Cloud Hosting',       125000, 'active',   'Key account — quarterly review.'),

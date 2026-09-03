@@ -30,10 +30,10 @@ import {
   paymentSchema,
   createPayment,
   updatePayment,
-  PAYMENT_METHODS,
   type PaymentInput,
   type PaymentWithClient,
 } from "@/lib/payments";
+import { useSettings } from "@/components/settings-provider";
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -62,6 +62,8 @@ export function PaymentForm({
   showTrigger?: boolean;
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
+  const { settings } = useSettings();
+  const paymentMethods = settings?.payment_methods || [];
   const controlled = open !== undefined;
   const isOpen = controlled ? open : internalOpen;
   const setOpen = controlled ? onOpenChange! : setInternalOpen;
@@ -167,7 +169,7 @@ export function PaymentForm({
                       <SelectValue placeholder="Select method" />
                     </SelectTrigger>
                     <SelectContent>
-                      {PAYMENT_METHODS.map((m) => (
+                      {paymentMethods.map((m) => (
                         <SelectItem key={m} value={m}>
                           {m}
                         </SelectItem>

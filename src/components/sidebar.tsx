@@ -9,6 +9,7 @@ import {
   Receipt,
   RefreshCw,
   Wallet,
+  Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -20,6 +21,8 @@ const nav = [
   { href: "/expenses", label: "Expenses", icon: Receipt },
   { href: "/recurring", label: "Recurring", icon: RefreshCw },
   { href: "/salaries", label: "Salaries", icon: Wallet },
+  { href: "/statements", label: "Statements", icon: Receipt },
+  { href: "/settings", label: "Settings", icon: Settings },
 ];
 
 export function SidebarNav() {

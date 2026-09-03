@@ -7,7 +7,7 @@ import {
   Users,
   Wallet,
   Clock,
-  ArrowLeftRight,
+  RefreshCw,
   Loader2,
   AlertCircle,
 } from "lucide-react";
@@ -19,14 +19,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { StatCard } from "@/components/stat-card";
 import { PageHeader } from "@/components/page-header";
 import {
@@ -37,10 +29,11 @@ import {
 } from "@/components/charts";
 import { listPayments, type PaymentWithClient } from "@/lib/payments";
 import { listExpenses, type Expense } from "@/lib/expenses";
-import { listSalaryPayments, netSalary, type SalaryPayment } from "@/lib/salaries";
+import { listSalaryPayments, netSalary, type SalaryPayment, listEmployees, type Employee } from "@/lib/salaries";
 import { listClients, type ClientSummary } from "@/lib/clients";
 import { listRecurring, daysUntil, type Recurring } from "@/lib/recurring";
-import { formatINR, formatDate } from "@/lib/format";
+import { formatDate } from "@/lib/format";
+import { useSettings } from "@/components/settings-provider";
 import { cn } from "@/lib/utils";
 
 const currentMonth = () => new Date().toISOString().slice(0, 7);
@@ -87,24 +80,29 @@ export default function DashboardPage() {
   const [payments, setPayments] = useState<PaymentWithClient[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [salaries, setSalaries] = useState<SalaryPayment[]>([]);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const [clients, setClients] = useState<ClientSummary[]>([]);
   const [recurring, setRecurring] = useState<Recurring[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const { formatCurrency } = useSettings();
+
   useEffect(() => {
     (async () => {
       try {
-        const [p, e, s, c, r] = await Promise.all([
+        const [p, e, s, emp, c, r] = await Promise.all([
           listPayments(),
           listExpenses(),
           listSalaryPayments(),
+          listEmployees(),
           listClients(),
           listRecurring(),
         ]);
         setPayments(p);
         setExpenses(e);
         setSalaries(s);
+        setEmployees(emp);
         setClients(c);
         setRecurring(r);
       } catch (err) {
@@ -138,22 +136,23 @@ export default function DashboardPage() {
 
     // Outstanding = each client's monthly billing − payments received this month.
     const receivedByClient = new Map<string, number>();
-    for (const p of payments)
-      if (ym(p.payment_date) === month)
+    for (const p of payments) {
+      if (ym(p.payment_date) === month) {
         receivedByClient.set(p.client_id, (receivedByClient.get(p.client_id) ?? 0) + p.amount);
+      }
+    }
     const outstanding = clients.reduce(
       (s, c) => s + Math.max(c.monthly_value - (receivedByClient.get(c.id) ?? 0), 0),
       0,
     );
 
-    // Cash flow = net cash (revenue − expenses − salaries) year-to-date,
-    // Jan of the selected year through the selected month.
-    const yearStart = `${month.slice(0, 4)}-01`;
-    const inYTD = (date: string) => ym(date) >= yearStart && ym(date) <= month;
-    const cashFlow =
-      payments.filter((p) => inYTD(p.payment_date)).reduce((s, p) => s + p.amount, 0) -
-      expenses.filter((e) => inYTD(e.expense_date)).reduce((s, e) => s + e.amount, 0) -
-      salaries.filter((p) => inYTD(p.payment_date)).reduce((s, p) => s + netSalary(p), 0);
+    const clientsWithOutstanding = clients.map(c => {
+      const remaining = Math.max(c.monthly_value - (receivedByClient.get(c.id) ?? 0), 0);
+      return { name: c.name, remaining };
+    }).filter(c => c.remaining > 0).sort((a, b) => b.remaining - a.remaining).slice(0, 5);
+
+    // Recurring Expenses for the month (total active recurring amounts)
+    const totalRecurring = recurring.filter(r => r.active).reduce((s, r) => s + r.amount, 0);
 
     // Expense categories for the selected month.
     const catMap = new Map<string, number>();
@@ -174,21 +173,34 @@ export default function DashboardPage() {
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 5);
 
-    const upcoming = recurring.filter((r) => r.active && daysUntil(r.next_payment_date) <= 30).slice(0, 5);
+    const upcoming = recurring.filter((r) => r.active && daysUntil(r.next_payment_date) <= 30).sort((a,b) => new Date(a.next_payment_date).getTime() - new Date(b.next_payment_date).getTime()).slice(0, 5);
+
+    // Pending salaries
+    const paidByEmployee = new Map<string, number>();
+    for (const p of salaries) {
+      if (ym(p.payment_date) === month) {
+        paidByEmployee.set(p.employee_id, (paidByEmployee.get(p.employee_id) ?? 0) + netSalary(p));
+      }
+    }
+    const pendingSalaries = employees.filter(e => e.status === "active").map(e => {
+      const remaining = Math.max(e.salary - (paidByEmployee.get(e.id) ?? 0), 0);
+      return { name: e.name, remaining };
+    }).filter(e => e.remaining > 0).sort((a, b) => b.remaining - a.remaining);
 
     return {
       selected,
       outstanding,
-      cashFlow,
+      totalRecurring,
       months,
       categories,
       topClients,
+      clientsWithOutstanding,
       upcoming,
+      pendingSalaries,
       recentPayments: payments.slice(0, 5),
       recentExpenses: expenses.slice(0, 5),
-      recentSalaries: salaries.slice(0, 5),
     };
-  }, [payments, expenses, salaries, clients, recurring, month]);
+  }, [payments, expenses, salaries, employees, clients, recurring, month]);
 
   const monthLabel = new Date(`${month}-01`).toLocaleString("en-IN", {
     month: "long",
@@ -233,15 +245,15 @@ export default function DashboardPage() {
             <StatCard title="Revenue" value={d.selected.revenue} icon={TrendingUp} accent="positive" hint="Payments received" />
             <StatCard title="Expenses" value={d.selected.expenses} icon={TrendingDown} accent="negative" hint="Business expenses" />
             <StatCard title="Salaries" value={d.selected.salaries} icon={Users} accent="negative" hint="Net salary paid" />
-            <StatCard title="Profit" value={d.selected.profit} icon={Wallet} accent={d.selected.profit >= 0 ? "positive" : "negative"} hint="Revenue − expenses − salaries" />
+            <StatCard title="Net Profit" value={d.selected.profit} icon={Wallet} accent={d.selected.profit >= 0 ? "positive" : "negative"} hint="Revenue − expenses − salaries" />
             <StatCard title="Outstanding" value={d.outstanding} icon={Clock} accent="warning" hint="Billing − received" />
-            <StatCard title="Cash Flow" value={d.cashFlow} icon={ArrowLeftRight} accent={d.cashFlow >= 0 ? "positive" : "negative"} hint="Net, year to date" />
+            <StatCard title="Recurring Expenses" value={d.totalRecurring} icon={RefreshCw} accent="default" hint="Monthly active recurring" />
           </div>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <Card className="lg:col-span-2">
               <CardHeader>
-                <CardTitle>Revenue vs Expenses</CardTitle>
+                <CardTitle>Revenue vs Expenses by Month</CardTitle>
                 <CardDescription>Last 12 months · expenses include salaries</CardDescription>
               </CardHeader>
               <CardContent>
@@ -255,71 +267,41 @@ export default function DashboardPage() {
             </Panel>
           </div>
 
-          <Panel title="Monthly Profit" description="Last 12 months">
-            <ProfitBarChart data={d.months.map((m) => ({ month: m.month, profit: m.profit }))} />
-          </Panel>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Monthly Financial Summary</CardTitle>
-              <CardDescription>Last 12 months</CardDescription>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Month</TableHead>
-                      <TableHead className="text-right">Revenue</TableHead>
-                      <TableHead className="text-right">Expenses</TableHead>
-                      <TableHead className="text-right">Salaries</TableHead>
-                      <TableHead className="text-right">Profit</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {d.months.map((m) => (
-                      <TableRow key={m.key}>
-                        <TableCell className="font-medium">{m.month}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatINR(m.revenue)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatINR(m.expenses)}</TableCell>
-                        <TableCell className="text-right tabular-nums">{formatINR(m.salaries)}</TableCell>
-                        <TableCell className={cn("text-right font-medium tabular-nums", m.profit >= 0 ? "text-emerald-600" : "text-red-600")}>
-                          {formatINR(m.profit)}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <Panel title="Top Clients by Revenue" description={monthLabel}>
+            <Panel title="Monthly Profit" description="Last 12 months">
+              <ProfitBarChart data={d.months.map((m) => ({ month: m.month, profit: m.profit }))} />
+            </Panel>
+            <Panel title="Revenue by Client" description={monthLabel}>
               <HorizontalBar data={d.topClients} nameKey="name" color="var(--chart-1)" />
             </Panel>
-            <Panel title="Upcoming Recurring" description="Next 30 days">
-              {d.upcoming.length === 0 ? (
-                <p className="text-sm text-muted-foreground">Nothing due soon.</p>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <Panel title="Clients with Outstanding Payments" description={monthLabel}>
+               {d.clientsWithOutstanding.length === 0 ? (
+                <p className="text-sm text-muted-foreground">All clients are paid up.</p>
               ) : (
                 <ul className="divide-y">
-                  {d.upcoming.map((r) => {
-                    const days = daysUntil(r.next_payment_date);
-                    return (
-                      <li key={r.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{r.name}</p>
-                          <p className="text-xs text-muted-foreground">{r.frequency} · {formatDate(r.next_payment_date)}</p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <span className={cn("text-xs", days < 0 ? "text-red-600" : days <= 7 ? "text-amber-600" : "text-muted-foreground")}>
-                            {days < 0 ? `Overdue ${-days}d` : days === 0 ? "Today" : `In ${days}d`}
-                          </span>
-                          <span className="text-sm font-semibold tabular-nums">{formatINR(r.amount)}</span>
-                        </div>
-                      </li>
-                    );
-                  })}
+                  {d.clientsWithOutstanding.map((c, i) => (
+                    <li key={i} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                      <p className="truncate text-sm font-medium">{c.name}</p>
+                      <span className="text-sm font-semibold tabular-nums text-amber-600">{formatCurrency(c.remaining)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+            <Panel title="Pending Salaries" description={monthLabel}>
+               {d.pendingSalaries.length === 0 ? (
+                <p className="text-sm text-muted-foreground">All salaries are paid.</p>
+              ) : (
+                <ul className="divide-y">
+                  {d.pendingSalaries.map((e, i) => (
+                    <li key={i} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                      <p className="truncate text-sm font-medium">{e.name}</p>
+                      <span className="text-sm font-semibold tabular-nums text-amber-600">{formatCurrency(e.remaining)}</span>
+                    </li>
+                  ))}
                 </ul>
               )}
             </Panel>
@@ -338,11 +320,30 @@ export default function DashboardPage() {
                 empty="No expenses yet"
               />
             </Panel>
-            <Panel title="Salary Payments">
-              <TxList
-                items={d.recentSalaries.map((s) => ({ id: s.id, primary: s.employees?.name ?? "Unknown", secondary: formatDate(s.payment_date), amount: netSalary(s), positive: false }))}
-                empty="No salary payments yet"
-              />
+            <Panel title="Upcoming Recurring Payments" description="Next 30 days">
+              {d.upcoming.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Nothing due soon.</p>
+              ) : (
+                <ul className="divide-y">
+                  {d.upcoming.map((r) => {
+                    const days = daysUntil(r.next_payment_date);
+                    return (
+                      <li key={r.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{r.name}</p>
+                          <p className="text-xs text-muted-foreground">{r.frequency} · {formatDate(r.next_payment_date)}</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <span className={cn("text-xs", days < 0 ? "text-red-600" : days <= 7 ? "text-amber-600" : "text-muted-foreground")}>
+                            {days < 0 ? `Overdue ${-days}d` : days === 0 ? "Today" : `In ${days}d`}
+                          </span>
+                          <span className="text-sm font-semibold tabular-nums">{formatCurrency(r.amount)}</span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </Panel>
           </div>
         </>
@@ -358,6 +359,7 @@ function TxList({
   items: { id: string; primary: string; secondary: string; amount: number; positive: boolean }[];
   empty: string;
 }) {
+  const { formatCurrency } = useSettings();
   if (items.length === 0) return <p className="text-sm text-muted-foreground">{empty}</p>;
   return (
     <ul className="divide-y">
@@ -368,7 +370,7 @@ function TxList({
             <p className="truncate text-xs text-muted-foreground">{t.secondary}</p>
           </div>
           <span className={cn("text-sm font-semibold tabular-nums", t.positive ? "text-emerald-600" : "text-foreground")}>
-            {formatINR(t.amount)}
+            {formatCurrency(t.amount)}
           </span>
         </li>
       ))}

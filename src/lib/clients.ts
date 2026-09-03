@@ -10,8 +10,10 @@ export const clientSchema = z.object({
     .string()
     .min(7, "Enter a valid phone number")
     .max(20)
-    .regex(/^[0-9+\-\s()]+$/, "Only digits and + - ( ) allowed"),
-  email: z.string().email("Enter a valid email"),
+    .regex(/^[0-9+\-\s()]+$/, "Only digits and + - ( ) allowed")
+    .optional()
+    .or(z.literal("")),
+  email: z.string().email("Enter a valid email").optional().or(z.literal("")),
   service: z.string().min(1, "Service is required").max(120),
   monthly_value: z
     .number({ error: "Enter a number" })

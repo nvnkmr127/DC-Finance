@@ -73,6 +73,7 @@ import {
   type Recurring,
 } from "@/lib/recurring";
 import { createExpense } from "@/lib/expenses";
+import { useSettings } from "@/components/settings-provider";
 import { formatINR, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
 
@@ -90,7 +91,11 @@ export default function RecurringPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
+  const [category, setCategory] = useState("all");
   const [status, setStatus] = useState("all");
+
+  const { settings } = useSettings();
+  const expenseCategories = settings?.expense_categories || [];
 
   const [editing, setEditing] = useState<Recurring | null>(null);
   const [deleting, setDeleting] = useState<Recurring | null>(null);
@@ -169,11 +174,20 @@ export default function RecurringPage() {
     return rows.filter((r) => {
       const haystack = `${r.name} ${r.category} ${r.vendor ?? ""} ${r.notes ?? ""}`.toLowerCase();
       const matchesQuery = !q || haystack.includes(q);
+      const matchesCategory = category === "all" || r.category === category;
       const matchesStatus =
         status === "all" || (status === "active" ? r.active : !r.active);
-      return matchesQuery && matchesStatus;
+      return matchesQuery && matchesCategory && matchesStatus;
     });
-  }, [rows, query, status]);
+  }, [rows, query, category, status]);
+
+  const hasFilters = query !== "" || category !== "all" || status !== "all";
+
+  function resetFilters() {
+    setQuery("");
+    setCategory("all");
+    setStatus("all");
+  }
 
   async function toggleActive(r: Recurring) {
     try {
@@ -374,6 +388,19 @@ export default function RecurringPage() {
             className="pl-9"
           />
         </div>
+        <Select value={category} onValueChange={setCategory}>
+          <SelectTrigger className="sm:w-44">
+            <SelectValue placeholder="All categories" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            {expenseCategories.map((c) => (
+              <SelectItem key={c} value={c}>
+                {c}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
         <Select value={status} onValueChange={setStatus}>
           <SelectTrigger className="sm:w-44">
             <SelectValue placeholder="All statuses" />
@@ -384,6 +411,16 @@ export default function RecurringPage() {
             <SelectItem value="inactive">Inactive</SelectItem>
           </SelectContent>
         </Select>
+        {hasFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={resetFilters}
+            className="text-muted-foreground hover:text-foreground"
+          >
+            Reset
+          </Button>
+        )}
       </div>
 
       <div className="rounded-lg border bg-card">
