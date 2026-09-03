@@ -43,7 +43,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
             <Sidebar />
             <div className="flex min-w-0 flex-1 flex-col">
               <Topbar />
-              <main className="flex-1 bg-muted/30 p-4 sm:p-6 lg:p-8">{children}</main>
+              <main className="flex-1 min-w-0 bg-muted/30 p-4 sm:p-6 lg:p-8">{children}</main>
             </div>
           </div>
           <Toaster />

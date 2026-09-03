@@ -12,10 +12,14 @@ import {
 import { SidebarNav } from "@/components/sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
 
+import { useState } from "react";
+
 export function Topbar() {
+  const [open, setOpen] = useState(false);
+
   return (
     <header className="flex h-16 items-center gap-3 border-b bg-background px-4 md:hidden">
-      <Sheet>
+      <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
           <Button variant="outline" size="icon">
             <Menu className="h-5 w-5" />
@@ -27,7 +31,7 @@ export function Topbar() {
             <SheetTitle>Digicloudify Finance</SheetTitle>
           </SheetHeader>
           <div className="py-2">
-            <SidebarNav />
+            <SidebarNav onNavigate={() => setOpen(false)} />
           </div>
         </SheetContent>
       </Sheet>
