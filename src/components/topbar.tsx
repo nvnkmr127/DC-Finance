@@ -11,11 +11,13 @@ import {
 } from "@/components/ui/sheet";
 import { SidebarNav } from "@/components/sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useSettings } from "@/components/settings-provider";
 
 import { useState } from "react";
 
 export function Topbar() {
   const [open, setOpen] = useState(false);
+  const { settings } = useSettings();
 
   return (
     <header className="flex h-16 items-center gap-3 border-b bg-background px-4 md:hidden">
@@ -28,14 +30,14 @@ export function Topbar() {
         </SheetTrigger>
         <SheetContent side="left" className="w-64 p-0">
           <SheetHeader className="h-16 justify-center px-6">
-            <SheetTitle>Digicloudify Finance</SheetTitle>
+            <SheetTitle>{settings?.company_name || "Digicloudify Finance"}</SheetTitle>
           </SheetHeader>
           <div className="py-2">
             <SidebarNav onNavigate={() => setOpen(false)} />
           </div>
         </SheetContent>
       </Sheet>
-      <span className="font-semibold">Digicloudify Finance</span>
+      <span className="font-semibold">{settings?.company_name || "Digicloudify Finance"}</span>
       <div className="ml-auto">
         <ThemeToggle />
       </div>
