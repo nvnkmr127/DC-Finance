@@ -63,11 +63,14 @@ create table if not exists public.recurring (
   name              text not null,
   category          text not null default 'Other'
                     check (category in ('Office', 'Software', 'Advertising', 'Equipment',
-                                        'Travel', 'Internet', 'Electricity', 'Freelancers', 'Other')),
+                                        'Travel', 'Internet', 'Electricity', 'Freelancers', 'Salary', 'Other')),
+  vendor            text,
   amount            numeric not null default 0,
   frequency         text not null default 'Monthly'
                     check (frequency in ('Monthly', 'Quarterly', 'Yearly')),
   next_payment_date date not null default now(),
+  payment_method    text not null default 'Bank Transfer'
+                    check (payment_method in ('Bank Transfer', 'UPI', 'Cash', 'Card', 'Other')),
   active            boolean not null default true,
   notes             text,
   created_at        timestamptz not null default now(),
