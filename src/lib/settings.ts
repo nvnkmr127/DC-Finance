@@ -20,7 +20,7 @@ export async function getSettings(): Promise<Settings> {
     .single();
 
   if (error) {
-    if (error.code === 'PGRST116') { // No rows found
+    if (error.code === 'PGRST116' || error.code === 'PGRST205') { // No rows found or table doesn't exist
       return {
         id: 1,
         company_name: "Digicloudify Finance",
