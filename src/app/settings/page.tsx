@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, Save, Plus, X } from "lucide-react";
+import { Loader2, Save, Plus, X, Download } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { updateSettings } from "@/lib/settings";
+import { exportAllData } from "@/lib/backup";
 import { useSettings } from "@/components/settings-provider";
 
 export default function SettingsPage() {
@@ -29,6 +30,20 @@ export default function SettingsPage() {
 
   const [emailRemindersEnabled, setEmailRemindersEnabled] = useState(false);
   const [reminderFromEmail, setReminderFromEmail] = useState("");
+
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      await exportAllData();
+      toast.success("Backup downloaded");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   useEffect(() => {
     if (settings) {
@@ -255,6 +270,19 @@ export default function SettingsPage() {
                 on the server (<code>RESEND_API_KEY</code>), not here.
               </p>
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle>Data & Backup</CardTitle>
+            <CardDescription>Download a full copy of your data as JSON.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Button variant="outline" onClick={handleExport} disabled={exporting}>
+              {exporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Download className="mr-2 h-4 w-4" />}
+              Export all data
+            </Button>
           </CardContent>
         </Card>
       </div>

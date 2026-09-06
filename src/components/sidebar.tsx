@@ -11,6 +11,8 @@ import {
   Receipt,
   RefreshCw,
   Wallet,
+  Target,
+  ScrollText,
   Settings,
   LogOut,
 } from "lucide-react";
@@ -28,7 +30,9 @@ const nav = [
   { href: "/expenses", label: "Expenses", icon: Receipt },
   { href: "/recurring", label: "Recurring", icon: RefreshCw },
   { href: "/salaries", label: "Salaries", icon: Wallet },
+  { href: "/budgets", label: "Budgets", icon: Target },
   { href: "/statements", label: "Statements", icon: Receipt },
+  { href: "/audit", label: "Audit Log", icon: ScrollText },
   { href: "/settings", label: "Settings", icon: Settings },
 ];
 

@@ -61,11 +61,14 @@ client with payments can't be deleted).
   advances the next-due date in one transaction, so a charge can't be double-recorded.
 - **Salaries** — employees and their salary payments (net = base + bonus − deduction);
   tracks paid vs pending per employee, with optional receipt attachments.
+- **Budgets** — set monthly per-category budgets and see budget vs actual with variance.
 - **Statements** — six report tabs: Income (P&L), Expense (by category), Cash Flow,
   Client Outstanding, Salary, and a filterable Transactions ledger with a running balance.
   Every tab supports **print** and **CSV export**.
-- **Settings** — company name, default currency, and editable expense-category /
-  payment-method lists.
+- **Audit Log** — append-only record of every create/update/delete (who, what, when),
+  written by a database trigger so it can't be edited from the app.
+- **Settings** — company name, default currency, editable expense-category /
+  payment-method lists, email-reminder toggle, and a one-click **JSON data export**.
 
 ## Getting started
 
