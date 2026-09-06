@@ -294,7 +294,7 @@ export default function ExpensesPage() {
                     <div className="flex items-center gap-2 font-medium">
                       <span>{e.description}</span>
                       {e.recurring && (
-                        <Badge variant="outline" className="border-violet-200 bg-violet-50 text-[10px] font-normal text-violet-700 py-0 px-1.5">
+                        <Badge variant="outline" className="border-teal-200 bg-teal-50 text-[10px] font-normal text-teal-700 py-0 px-1.5 dark:border-teal-900 dark:bg-teal-950/40 dark:text-teal-400">
                           Recurring
                         </Badge>
                       )}

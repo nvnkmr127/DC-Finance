@@ -7,7 +7,13 @@ export async function getOpeningBalance(month: string): Promise<number | null> {
     .eq("month", month)
     .maybeSingle();
 
-  if (error) throw new Error(error.message);
+  // Opening balance is optional. If the table hasn't been created yet, treat it
+  // as "no opening balance" so the rest of the statement still renders instead
+  // of failing the whole page. Any other error is a real problem.
+  if (error) {
+    if (error.code === "PGRST205" || error.code === "42P01") return null;
+    throw new Error(error.message);
+  }
   return data?.balance ?? null;
 }
 

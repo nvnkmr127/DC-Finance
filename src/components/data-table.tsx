@@ -126,7 +126,7 @@ export function DataTable<T extends Row>({
         })}
       </div>
 
-      <div className="rounded-lg border bg-card">
+      <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
         <Table>
           <TableHeader>
             <TableRow>
