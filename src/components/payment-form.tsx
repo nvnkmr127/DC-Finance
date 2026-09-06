@@ -40,6 +40,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 const emptyValues = (): PaymentInput => ({
   client_id: "",
   invoice_id: "",
+  project_id: "",
   amount: 0,
   payment_date: today(),
   payment_method: "Bank Transfer",
@@ -54,9 +55,17 @@ export type PaymentInvoiceOption = {
   balance: number;
 };
 
+export type PaymentProjectOption = {
+  id: string;
+  name: string;
+  client_id: string | null;
+  balance: number;
+};
+
 export function PaymentForm({
   clients,
   invoices = [],
+  projects = [],
   payment,
   open,
   onOpenChange,
@@ -65,6 +74,7 @@ export function PaymentForm({
 }: {
   clients: { id: string; name: string; company: string; monthly_value?: number }[];
   invoices?: PaymentInvoiceOption[];
+  projects?: PaymentProjectOption[];
   payment?: PaymentWithClient;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -97,6 +107,12 @@ export function PaymentForm({
       inv.client_id === selectedClient &&
       (inv.balance > 0 || inv.id === payment?.invoice_id),
   );
+  // Open projects for the chosen client (plus the one already linked, if editing).
+  const clientProjects = projects.filter(
+    (p) =>
+      p.client_id === selectedClient &&
+      (p.balance > 0 || p.id === payment?.project_id),
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -105,6 +121,7 @@ export function PaymentForm({
         ? {
             client_id: payment.client_id,
             invoice_id: payment.invoice_id ?? "",
+            project_id: payment.project_id ?? "",
             amount: payment.amount,
             payment_date: payment.payment_date,
             payment_method: payment.payment_method as PaymentInput["payment_method"],
@@ -159,6 +176,7 @@ export function PaymentForm({
                     onValueChange={(v) => {
                       field.onChange(v);
                       setValue("invoice_id", ""); // clear invoice when client changes
+                      setValue("project_id", ""); // clear project when client changes
                       // Auto-fill amount from the client's monthly value.
                       const c = clients.find((cl) => cl.id === v);
                       if (c?.monthly_value != null) {
@@ -206,6 +224,39 @@ export function PaymentForm({
                         {clientInvoices.map((inv) => (
                           <SelectItem key={inv.id} value={inv.id}>
                             {inv.invoice_number} · balance {inv.balance}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </Field>
+            )}
+
+            {clientProjects.length > 0 && (
+              <Field label="Apply to Project" htmlFor="project_id" error={errors.project_id?.message}>
+                <Controller
+                  control={control}
+                  name="project_id"
+                  render={({ field }) => (
+                    <Select
+                      value={field.value || "none"}
+                      onValueChange={(v) => {
+                        field.onChange(v === "none" ? "" : v);
+                        const pr = clientProjects.find((p) => p.id === v);
+                        if (pr) {
+                          setValue("amount", pr.balance, { shouldValidate: true, shouldDirty: true });
+                        }
+                      }}
+                    >
+                      <SelectTrigger id="project_id" className="w-full">
+                        <SelectValue placeholder="No project" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No project</SelectItem>
+                        {clientProjects.map((p) => (
+                          <SelectItem key={p.id} value={p.id}>
+                            {p.name} · balance {p.balance}
                           </SelectItem>
                         ))}
                       </SelectContent>

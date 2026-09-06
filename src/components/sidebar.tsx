@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
+  FolderKanban,
   FileText,
   CreditCard,
   BellRing,
@@ -24,6 +25,7 @@ import { useAuth } from "@/components/auth-provider";
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/clients", label: "Clients", icon: Users },
+  { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/invoices", label: "Invoices", icon: FileText },
   { href: "/payments", label: "Payments", icon: CreditCard },
   { href: "/collections", label: "Collections", icon: BellRing },

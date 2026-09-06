@@ -324,6 +324,52 @@ grant all on public.invoices      to authenticated;
 grant all on public.invoice_items to authenticated;
 grant select on public.invoice_summary to authenticated;
 
+-- ---- Projects / SaaS engagements -----------------------------------------
+-- Fixed-value project work; payments link to a project for received/balance.
+-- client_id nullable (internal SaaS products have no external client).
+
+create table if not exists public.projects (
+  id          uuid primary key default gen_random_uuid(),
+  name        text not null,
+  client_id   uuid references public.clients(id) on delete set null,
+  value       numeric not null default 0 check (value >= 0),
+  status      text not null default 'active' check (status in ('active', 'completed', 'on-hold')),
+  start_date  date not null default now(),
+  notes       text,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+alter table public.payments
+  add column if not exists project_id uuid references public.projects(id) on delete set null;
+
+create index if not exists projects_client_id_idx on public.projects (client_id);
+create index if not exists projects_status_idx     on public.projects (status);
+create index if not exists payments_project_id_idx on public.payments (project_id);
+
+drop trigger if exists set_updated_at on public.projects;
+create trigger set_updated_at before update on public.projects
+  for each row execute function public.set_updated_at();
+
+create or replace view public.project_summary
+with (security_invoker = true) as
+select
+  p.*,
+  c.name    as client_name,
+  c.company as client_company,
+  coalesce(sum(pay.amount), 0)::numeric as received,
+  greatest(p.value - coalesce(sum(pay.amount), 0), 0)::numeric as balance
+from public.projects p
+left join public.clients c on c.id = p.client_id
+left join public.payments pay on pay.project_id = p.id
+group by p.id, c.name, c.company;
+
+alter table public.projects enable row level security;
+drop policy if exists "projects authenticated all" on public.projects;
+create policy "projects authenticated all" on public.projects for all to authenticated using (true) with check (true);
+grant all on public.projects to authenticated;
+grant select on public.project_summary to authenticated;
+
 -- ---- Receipts storage ----------------------------------------------------
 -- Private bucket for expense / salary receipt attachments (signed-URL access).
 
@@ -379,7 +425,7 @@ declare t text;
 begin
   foreach t in array array[
     'clients','employees','payments','expenses','recurring',
-    'salary_payments','invoices','opening_balances','settings'
+    'salary_payments','invoices','projects','opening_balances','settings'
   ]
   loop
     execute format('drop trigger if exists audit on public.%I', t);

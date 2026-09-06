@@ -55,10 +55,15 @@ import {
 } from "@/components/ui/alert-dialog";
 import { PageHeader } from "@/components/page-header";
 import { MetricCard } from "@/components/metric-card";
-import { PaymentForm, type PaymentInvoiceOption } from "@/components/payment-form";
+import {
+  PaymentForm,
+  type PaymentInvoiceOption,
+  type PaymentProjectOption,
+} from "@/components/payment-form";
 import { listPayments, deletePayment, type PaymentWithClient } from "@/lib/payments";
 import { listClients, type ClientSummary } from "@/lib/clients";
 import { listInvoices } from "@/lib/invoices";
+import { listProjects } from "@/lib/projects";
 import { formatINR, formatDate } from "@/lib/format";
 import { useSettings } from "@/components/settings-provider";
 
@@ -66,6 +71,7 @@ export default function PaymentsPage() {
   const [payments, setPayments] = useState<PaymentWithClient[]>([]);
   const [clients, setClients] = useState<ClientSummary[]>([]);
   const [invoiceOpts, setInvoiceOpts] = useState<PaymentInvoiceOption[]>([]);
+  const [projectOpts, setProjectOpts] = useState<PaymentProjectOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,7 +92,12 @@ export default function PaymentsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [p, c, inv] = await Promise.all([listPayments(), listClients(), listInvoices()]);
+      const [p, c, inv, prj] = await Promise.all([
+        listPayments(),
+        listClients(),
+        listInvoices(),
+        listProjects(),
+      ]);
       setPayments(p);
       setClients(c);
       setInvoiceOpts(
@@ -95,6 +106,14 @@ export default function PaymentsPage() {
           invoice_number: i.invoice_number,
           client_id: i.client_id,
           balance: i.balance,
+        })),
+      );
+      setProjectOpts(
+        prj.map((p) => ({
+          id: p.id,
+          name: p.name,
+          client_id: p.client_id,
+          balance: p.balance,
         })),
       );
     } catch (e) {
@@ -168,7 +187,7 @@ export default function PaymentsPage() {
       <PageHeader
         title="Payments"
         description={loading ? "Loading…" : `${payments.length} payments`}
-        action={<PaymentForm showTrigger clients={clients} invoices={invoiceOpts} onSaved={refetch} />}
+        action={<PaymentForm showTrigger clients={clients} invoices={invoiceOpts} projects={projectOpts} onSaved={refetch} />}
       />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -362,6 +381,7 @@ export default function PaymentsPage() {
       <PaymentForm
         clients={clients}
         invoices={invoiceOpts}
+        projects={projectOpts}
         payment={editing ?? undefined}
         open={editing !== null}
         onOpenChange={(o) => !o && setEditing(null)}
