@@ -11,10 +11,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { updateSettings } from "@/lib/settings";
 import { exportAllData } from "@/lib/backup";
+import { listServices, createService, deleteService, type Service } from "@/lib/services";
 import { useSettings } from "@/components/settings-provider";
 
 export default function SettingsPage() {
-  const { settings, loading, refreshSettings } = useSettings();
+  const { settings, loading, refreshSettings, formatCurrency } = useSettings();
   
   const [saving, setSaving] = useState(false);
   
@@ -28,6 +29,11 @@ export default function SettingsPage() {
   
   const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
   const [newMethod, setNewMethod] = useState("");
+
+  const [services, setServices] = useState<Service[]>([]);
+  const [newServiceName, setNewServiceName] = useState("");
+  const [newServicePrice, setNewServicePrice] = useState("");
+  const [newServiceDesc, setNewServiceDesc] = useState("");
 
   const [emailRemindersEnabled, setEmailRemindersEnabled] = useState(false);
   const [reminderFromEmail, setReminderFromEmail] = useState("");
@@ -45,6 +51,17 @@ export default function SettingsPage() {
       setExporting(false);
     }
   }
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const list = await listServices();
+        setServices(list);
+      } catch (err) {
+        console.error(err);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     if (settings) {
@@ -88,6 +105,42 @@ export default function SettingsPage() {
 
   const removeMethod = (m: string) => {
     setPaymentMethods(paymentMethods.filter((c) => c !== m));
+  };
+
+  const handleAddService = async () => {
+    const name = newServiceName.trim();
+    if (!name) {
+      toast.error("Please enter a service name");
+      return;
+    }
+    const price = parseFloat(newServicePrice) || 0;
+    try {
+      const created = await createService({
+        name,
+        price,
+        description: newServiceDesc.trim() || undefined,
+      });
+      setServices((prev) => [
+        ...prev.filter((s) => s.name.toLowerCase() !== name.toLowerCase()),
+        created,
+      ]);
+      setNewServiceName("");
+      setNewServicePrice("");
+      setNewServiceDesc("");
+      toast.success(`Added service "${name}"`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add service");
+    }
+  };
+
+  const handleDeleteService = async (id: string, name: string) => {
+    try {
+      await deleteService(id);
+      setServices((prev) => prev.filter((s) => s.id !== id));
+      toast.success(`Removed service "${name}"`);
+    } catch {
+      toast.error("Failed to remove service");
+    }
   };
 
   const handleSave = async () => {
@@ -242,6 +295,84 @@ export default function SettingsPage() {
                   </button>
                 </div>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle>Services & Pricing</CardTitle>
+            <CardDescription>
+              Preset services with default monthly pricing. These appear as live AJAX search results when adding or editing clients.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-2 sm:grid-cols-12">
+              <div className="sm:col-span-5">
+                <Input
+                  value={newServiceName}
+                  onChange={(e) => setNewServiceName(e.target.value)}
+                  placeholder="Service name (e.g. Cloud Hosting)..."
+                  onKeyDown={(e) => e.key === "Enter" && handleAddService()}
+                />
+              </div>
+              <div className="sm:col-span-3">
+                <Input
+                  type="number"
+                  min="0"
+                  value={newServicePrice}
+                  onChange={(e) => setNewServicePrice(e.target.value)}
+                  placeholder={`Price (${currency})...`}
+                  onKeyDown={(e) => e.key === "Enter" && handleAddService()}
+                />
+              </div>
+              <div className="sm:col-span-3">
+                <Input
+                  value={newServiceDesc}
+                  onChange={(e) => setNewServiceDesc(e.target.value)}
+                  placeholder="Description (optional)..."
+                  onKeyDown={(e) => e.key === "Enter" && handleAddService()}
+                />
+              </div>
+              <div className="sm:col-span-1">
+                <Button type="button" variant="secondary" className="w-full" onClick={handleAddService}>
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="divide-y rounded-md border text-sm max-h-72 overflow-y-auto">
+              {services.length === 0 ? (
+                <div className="p-4 text-center text-xs text-muted-foreground">
+                  No preset services configured yet. Add your first service above.
+                </div>
+              ) : (
+                services.map((s) => (
+                  <div key={s.id} className="flex items-center justify-between p-3 hover:bg-muted/30">
+                    <div className="min-w-0 pr-3">
+                      <div className="font-medium text-foreground">{s.name}</div>
+                      {s.description && (
+                        <div className="text-xs text-muted-foreground truncate">{s.description}</div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="font-semibold text-primary tabular-nums">
+                        {formatCurrency(s.price)}
+                        <span className="text-xs font-normal text-muted-foreground">/mo</span>
+                      </span>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        onClick={() => handleDeleteService(s.id, s.name)}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>

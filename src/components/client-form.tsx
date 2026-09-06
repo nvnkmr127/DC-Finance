@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, MoneyInput } from "@/components/form-field";
+import { ServiceSearch } from "@/components/service-search";
 import {
   clientSchema,
   createClient,
@@ -68,6 +69,7 @@ export function ClientForm({
     handleSubmit,
     control,
     reset,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<ClientInput>({
     resolver: zodResolver(clientSchema),
@@ -127,7 +129,29 @@ export function ClientForm({
               <Input id="email" type="email" aria-invalid={!!errors.email} {...register("email")} placeholder="name@company.in" />
             </Field>
             <Field label="Service" htmlFor="service" required error={errors.service?.message}>
-              <Input id="service" aria-invalid={!!errors.service} {...register("service")} placeholder="e.g. Cloud Hosting" />
+              <Controller
+                control={control}
+                name="service"
+                render={({ field }) => (
+                  <ServiceSearch
+                    id="service"
+                    value={field.value}
+                    onChange={field.onChange}
+                    onSelectService={(selectedService) => {
+                      field.onChange(selectedService.name);
+                      if (selectedService.price > 0) {
+                        setValue("monthly_value", selectedService.price, {
+                          shouldValidate: true,
+                          shouldDirty: true,
+                        });
+                        toast.info(`Selected ${selectedService.name} (pricing auto-filled)`);
+                      }
+                    }}
+                    error={!!errors.service}
+                    placeholder="Search services with pricing…"
+                  />
+                )}
+              />
             </Field>
             <Field label="Monthly Value" htmlFor="monthly_value" required error={errors.monthly_value?.message}>
               <MoneyInput id="monthly_value" aria-invalid={!!errors.monthly_value} {...register("monthly_value", { valueAsNumber: true })} placeholder="0" />
