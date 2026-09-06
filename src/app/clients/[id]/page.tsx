@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Mail, Phone, Briefcase } from "lucide-react";
+import { ArrowLeft, Loader2, Mail, Phone, Briefcase, History, TrendingUp, TrendingDown, Pencil } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -24,11 +24,14 @@ import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { MetricCard } from "@/components/metric-card";
+import { ClientForm } from "@/components/client-form";
 import {
   getClientSummary,
   getClientPayments,
+  getClientPricingHistory,
   type ClientSummary,
   type Payment,
+  type ClientPricingRevision,
 } from "@/lib/clients";
 import { formatINR, formatDate } from "@/lib/format";
 
@@ -36,24 +39,30 @@ export default function ClientDetailPage() {
   const { id } = useParams<{ id: string }>();
   const [client, setClient] = useState<ClientSummary | null>(null);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [pricingHistory, setPricingHistory] = useState<ClientPricingRevision[]>([]);
+  const [editOpen, setEditOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loadData = async () => {
+    try {
+      const [c, p, h] = await Promise.all([
+        getClientSummary(id),
+        getClientPayments(id),
+        getClientPricingHistory(id),
+      ]);
+      setClient(c);
+      setPayments(p);
+      setPricingHistory(h);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load client");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    (async () => {
-      try {
-        const [c, p] = await Promise.all([
-          getClientSummary(id),
-          getClientPayments(id),
-        ]);
-        setClient(c);
-        setPayments(p);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load client");
-      } finally {
-        setLoading(false);
-      }
-    })();
+    loadData();
   }, [id]);
 
   // Revenue per month for the trailing 6 months, from this client's payments.
@@ -108,44 +117,154 @@ export default function ClientDetailPage() {
       <PageHeader
         title={client.name}
         description={client.company}
-        action={<StatusBadge status={client.status} />}
+        action={
+          <div className="flex items-center gap-2">
+            <StatusBadge status={client.status} />
+            <Button variant="outline" size="sm" onClick={() => setEditOpen(true)}>
+              <Pencil className="mr-1.5 h-3.5 w-3.5" />
+              Edit Client
+            </Button>
+          </div>
+        }
+      />
+
+      <ClientForm
+        client={client}
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        onSaved={loadData}
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* Client information */}
-        <Card className="lg:col-span-1">
-          <CardHeader>
-            <CardTitle>Client Information</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3 text-sm">
-            <div className="flex items-center gap-2">
-              <Mail className="h-4 w-4 text-muted-foreground" />
-              <a href={`mailto:${client.email}`} className="hover:underline">
-                {client.email}
-              </a>
-            </div>
-            <div className="flex items-center gap-2">
-              <Phone className="h-4 w-4 text-muted-foreground" />
-              <span>{client.phone}</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Briefcase className="h-4 w-4 text-muted-foreground" />
-              <span>{client.service}</span>
-            </div>
-            <div className="flex justify-between border-t pt-3">
-              <span className="text-muted-foreground">Monthly Value</span>
-              <span className="font-medium tabular-nums">
-                {formatINR(client.monthly_value)}
-              </span>
-            </div>
-            {client.notes && (
-              <div className="border-t pt-3">
-                <p className="mb-1 text-muted-foreground">Notes</p>
-                <p className="whitespace-pre-wrap">{client.notes}</p>
+        {/* Left column: Client information + Pricing revision history */}
+        <div className="space-y-4 lg:col-span-1">
+          <Card>
+            <CardHeader>
+              <CardTitle>Client Information</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3 text-sm">
+              <div className="flex items-center gap-2">
+                <Mail className="h-4 w-4 text-muted-foreground" />
+                <a href={`mailto:${client.email}`} className="hover:underline">
+                  {client.email}
+                </a>
               </div>
-            )}
-          </CardContent>
-        </Card>
+              <div className="flex items-center gap-2">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                <span>{client.phone}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Briefcase className="h-4 w-4 text-muted-foreground" />
+                <span>{client.service}</span>
+              </div>
+              <div className="flex justify-between border-t pt-3">
+                <span className="text-muted-foreground">Current Monthly Value</span>
+                <span className="font-semibold tabular-nums text-foreground">
+                  {formatINR(client.monthly_value)}
+                </span>
+              </div>
+              {client.notes && (
+                <div className="border-t pt-3">
+                  <p className="mb-1 text-muted-foreground">Notes</p>
+                  <p className="whitespace-pre-wrap">{client.notes}</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Pricing & Contract Revision History */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-semibold text-foreground text-sm">
+                  <History className="h-4 w-4 text-primary" />
+                  Pricing History & Auditing
+                </div>
+                <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
+                  {pricingHistory.length} {pricingHistory.length === 1 ? "log" : "logs"}
+                </span>
+              </div>
+              <CardDescription>
+                Audited contract revisions and price adjustments.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 p-4 pt-0">
+              {pricingHistory.length === 0 ? (
+                <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
+                  <div className="font-medium text-foreground">Baseline Contract</div>
+                  <div>Rate: {formatINR(client.monthly_value)}/mo for {client.service}</div>
+                  <div className="mt-1 text-[11px] text-muted-foreground/80">
+                    Future contract price updates will be logged here with timestamps and audit trail.
+                  </div>
+                </div>
+              ) : (
+                <div className="relative space-y-3 pl-3 before:absolute before:bottom-1 before:left-1 before:top-1 before:w-[2px] before:bg-border">
+                  {pricingHistory.map((rev) => {
+                    const isIncrease = rev.diff > 0;
+                    const isDecrease = rev.diff < 0;
+
+                    return (
+                      <div key={rev.id} className="relative pl-3 text-xs">
+                        <span className="absolute -left-[15px] top-1 h-2 w-2 rounded-full border-2 border-background bg-primary" />
+                        <div className="flex items-center justify-between">
+                          <span className="font-semibold text-foreground">
+                            {formatINR(rev.new_price)}
+                            <span className="text-[10px] font-normal text-muted-foreground">/mo</span>
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {new Date(rev.changed_at).toLocaleDateString("en-IN", {
+                              day: "numeric",
+                              month: "short",
+                              year: "numeric",
+                            })}
+                          </span>
+                        </div>
+
+                        {rev.old_price !== null && (
+                          <div className="mt-0.5 flex items-center gap-1 text-[11px]">
+                            <span className="text-muted-foreground line-through">
+                              {formatINR(rev.old_price)}
+                            </span>
+                            <span>&rarr;</span>
+                            <span
+                              className={`flex items-center font-medium ${
+                                isIncrease
+                                  ? "text-emerald-600 dark:text-emerald-400"
+                                  : isDecrease
+                                  ? "text-rose-600 dark:text-rose-400"
+                                  : "text-muted-foreground"
+                              }`}
+                            >
+                              {isIncrease ? <TrendingUp className="mr-0.5 h-3 w-3" /> : null}
+                              {isDecrease ? <TrendingDown className="mr-0.5 h-3 w-3" /> : null}
+                              {isIncrease ? "+" : ""}
+                              {formatINR(rev.diff)}
+                              {rev.percentage_change !== null
+                                ? ` (${isIncrease ? "+" : ""}${rev.percentage_change}%)`
+                                : ""}
+                            </span>
+                          </div>
+                        )}
+
+                        {rev.new_service && (
+                          <div className="text-[11px] text-muted-foreground truncate mt-0.5">
+                            {rev.old_service && rev.old_service !== rev.new_service
+                              ? `${rev.old_service} → ${rev.new_service}`
+                              : rev.new_service}
+                          </div>
+                        )}
+
+                        <div className="mt-0.5 text-[10px] text-muted-foreground/70">
+                          {rev.action === "CREATED" ? "Initial contract" : "Revised"} by {rev.actor || "Admin"}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Totals + payment history */}
         <div className="space-y-4 lg:col-span-2">
