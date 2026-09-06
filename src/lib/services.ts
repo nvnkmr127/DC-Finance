@@ -123,6 +123,43 @@ export async function createService(input: ServiceInput): Promise<Service> {
   }
 }
 
+export async function updateService(id: string, input: Partial<ServiceInput>): Promise<Service | null> {
+  try {
+    const updates: Record<string, unknown> = {};
+    if (input.name !== undefined) updates.name = input.name.trim();
+    if (input.price !== undefined) updates.price = Number(input.price) || 0;
+    if (input.description !== undefined) updates.description = input.description?.trim() || null;
+
+    const { data, error } = await getSupabase()
+      .from("services")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (error) {
+      const current = getLocalServices();
+      const idx = current.findIndex((s) => s.id === id);
+      if (idx !== -1) {
+        current[idx] = { ...current[idx], ...updates, updated_at: new Date().toISOString() };
+        saveLocalServices(current);
+        return current[idx];
+      }
+      return null;
+    }
+    return data;
+  } catch {
+    const current = getLocalServices();
+    const idx = current.findIndex((s) => s.id === id);
+    if (idx !== -1) {
+      current[idx] = { ...current[idx], ...input, updated_at: new Date().toISOString() };
+      saveLocalServices(current);
+      return current[idx];
+    }
+    return null;
+  }
+}
+
 export async function deleteService(id: string): Promise<void> {
   try {
     const { error } = await getSupabase().from("services").delete().eq("id", id);
@@ -135,3 +172,4 @@ export async function deleteService(id: string): Promise<void> {
     saveLocalServices(current.filter((s) => s.id !== id));
   }
 }
+

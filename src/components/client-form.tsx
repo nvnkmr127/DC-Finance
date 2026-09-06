@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, Controller, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { useSettings } from "@/components/settings-provider";
 import {
   Dialog,
   DialogContent,
@@ -59,7 +60,9 @@ export function ClientForm({
   onSaved: () => void;
   showTrigger?: boolean;
 }) {
+  const { formatCurrency } = useSettings();
   const [internalOpen, setInternalOpen] = useState(false);
+  const [catalogPrice, setCatalogPrice] = useState<number | null>(null);
   const controlled = open !== undefined;
   const isOpen = controlled ? open : internalOpen;
   const setOpen = controlled ? onOpenChange! : setInternalOpen;
@@ -76,8 +79,13 @@ export function ClientForm({
     defaultValues: empty,
   });
 
+  const currentMonthlyValue = useWatch({ control, name: "monthly_value" });
+
   useEffect(() => {
-    if (isOpen) reset(client ? { ...client } : empty);
+    if (isOpen) {
+      reset(client ? { ...client } : empty);
+      setCatalogPrice(null);
+    }
   }, [isOpen, client, reset]);
 
   const onSubmit = async (values: ClientInput) => {
@@ -139,6 +147,7 @@ export function ClientForm({
                     onChange={field.onChange}
                     onSelectService={(selectedService) => {
                       field.onChange(selectedService.name);
+                      setCatalogPrice(selectedService.price);
                       if (selectedService.price > 0) {
                         setValue("monthly_value", selectedService.price, {
                           shouldValidate: true,
@@ -155,6 +164,12 @@ export function ClientForm({
             </Field>
             <Field label="Monthly Value" htmlFor="monthly_value" required error={errors.monthly_value?.message}>
               <MoneyInput id="monthly_value" aria-invalid={!!errors.monthly_value} {...register("monthly_value", { valueAsNumber: true })} placeholder="0" />
+              {catalogPrice !== null && currentMonthlyValue !== catalogPrice && (
+                <p className="mt-1 text-[11px] text-muted-foreground flex items-center gap-1">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
+                  Custom client pricing (standard: {formatCurrency(catalogPrice)}/mo)
+                </p>
+              )}
             </Field>
             <Field label="Status" htmlFor="status" required error={errors.status?.message}>
               <Controller

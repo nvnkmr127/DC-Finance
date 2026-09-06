@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, Save, Plus, X, Download } from "lucide-react";
+import { Loader2, Save, Plus, X, Download, Pencil, Check } from "lucide-react";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -11,7 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Checkbox } from "@/components/ui/checkbox";
 import { updateSettings } from "@/lib/settings";
 import { exportAllData } from "@/lib/backup";
-import { listServices, createService, deleteService, type Service } from "@/lib/services";
+import { listServices, createService, updateService, deleteService, type Service } from "@/lib/services";
 import { useSettings } from "@/components/settings-provider";
 
 export default function SettingsPage() {
@@ -34,6 +34,8 @@ export default function SettingsPage() {
   const [newServiceName, setNewServiceName] = useState("");
   const [newServicePrice, setNewServicePrice] = useState("");
   const [newServiceDesc, setNewServiceDesc] = useState("");
+  const [editingServiceId, setEditingServiceId] = useState<string | null>(null);
+  const [editPrice, setEditPrice] = useState("");
 
   const [emailRemindersEnabled, setEmailRemindersEnabled] = useState(false);
   const [reminderFromEmail, setReminderFromEmail] = useState("");
@@ -140,6 +142,29 @@ export default function SettingsPage() {
       toast.success(`Removed service "${name}"`);
     } catch {
       toast.error("Failed to remove service");
+    }
+  };
+
+  const handleStartEdit = (s: Service) => {
+    setEditingServiceId(s.id);
+    setEditPrice(String(s.price));
+  };
+
+  const handleSaveEdit = async (s: Service) => {
+    const price = parseFloat(editPrice);
+    if (isNaN(price) || price < 0) {
+      toast.error("Please enter a valid price");
+      return;
+    }
+    try {
+      const updated = await updateService(s.id, { price });
+      if (updated) {
+        setServices((prev) => prev.map((item) => (item.id === s.id ? updated : item)));
+        toast.success(`Updated pricing for "${s.name}" to ${formatCurrency(price)}/mo`);
+      }
+      setEditingServiceId(null);
+    } catch {
+      toast.error("Failed to update pricing");
     }
   };
 
@@ -355,20 +380,67 @@ export default function SettingsPage() {
                         <div className="text-xs text-muted-foreground truncate">{s.description}</div>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 shrink-0">
-                      <span className="font-semibold text-primary tabular-nums">
-                        {formatCurrency(s.price)}
-                        <span className="text-xs font-normal text-muted-foreground">/mo</span>
-                      </span>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        onClick={() => handleDeleteService(s.id, s.name)}
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {editingServiceId === s.id ? (
+                        <div className="flex items-center gap-1.5">
+                          <Input
+                            type="number"
+                            min="0"
+                            value={editPrice}
+                            onChange={(e) => setEditPrice(e.target.value)}
+                            className="h-7 w-28 text-xs tabular-nums"
+                            onKeyDown={(e) => e.key === "Enter" && handleSaveEdit(s)}
+                            autoFocus
+                          />
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="default"
+                            className="h-7 w-7"
+                            title="Save price"
+                            onClick={() => handleSaveEdit(s)}
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7"
+                            title="Cancel"
+                            onClick={() => setEditingServiceId(null)}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <>
+                          <span className="font-semibold text-primary tabular-nums">
+                            {formatCurrency(s.price)}
+                            <span className="text-xs font-normal text-muted-foreground">/mo</span>
+                          </span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            title="Edit pricing"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            onClick={() => handleStartEdit(s)}
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            title="Remove service"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={() => handleDeleteService(s.id, s.name)}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                 ))
