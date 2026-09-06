@@ -63,7 +63,7 @@ export function PaymentForm({
   onSaved,
   showTrigger = false,
 }: {
-  clients: { id: string; name: string; company: string }[];
+  clients: { id: string; name: string; company: string; monthly_value?: number }[];
   invoices?: PaymentInvoiceOption[];
   payment?: PaymentWithClient;
   open?: boolean;
@@ -159,6 +159,11 @@ export function PaymentForm({
                     onValueChange={(v) => {
                       field.onChange(v);
                       setValue("invoice_id", ""); // clear invoice when client changes
+                      // Auto-fill amount from the client's monthly value.
+                      const c = clients.find((cl) => cl.id === v);
+                      if (c?.monthly_value != null) {
+                        setValue("amount", c.monthly_value, { shouldValidate: true, shouldDirty: true });
+                      }
                     }}
                   >
                     <SelectTrigger id="client_id" aria-invalid={!!errors.client_id} className="w-full">
@@ -184,7 +189,14 @@ export function PaymentForm({
                   render={({ field }) => (
                     <Select
                       value={field.value || "none"}
-                      onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
+                      onValueChange={(v) => {
+                        field.onChange(v === "none" ? "" : v);
+                        // Paying against an invoice → default amount to its balance.
+                        const inv = clientInvoices.find((i) => i.id === v);
+                        if (inv) {
+                          setValue("amount", inv.balance, { shouldValidate: true, shouldDirty: true });
+                        }
+                      }}
                     >
                       <SelectTrigger id="invoice_id" className="w-full">
                         <SelectValue placeholder="No invoice" />

@@ -10,7 +10,8 @@ create table if not exists public.clients (
   phone         text not null,
   email         text not null,
   service       text not null,
-  monthly_value numeric not null default 0,
+  monthly_value numeric not null default 0,  -- amount per billing cycle (see billing_cycle)
+  billing_cycle text not null default 'monthly' check (billing_cycle in ('monthly', 'quarterly', 'commission')),
   status        text not null default 'active' check (status in ('active', 'inactive')),
   notes         text,
   created_at    timestamptz not null default now(),

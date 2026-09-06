@@ -30,7 +30,7 @@ import {
 import { listPayments, type PaymentWithClient } from "@/lib/payments";
 import { listExpenses, type Expense } from "@/lib/expenses";
 import { listSalaryPayments, netSalary, type SalaryPayment, listEmployees, type Employee } from "@/lib/salaries";
-import { listClients, type ClientSummary } from "@/lib/clients";
+import { listClients, monthlyEquivalent, type ClientSummary } from "@/lib/clients";
 import { listRecurring, daysUntil, type Recurring } from "@/lib/recurring";
 import { formatDate, financialYear } from "@/lib/format";
 import { useSettings } from "@/components/settings-provider";
@@ -143,12 +143,12 @@ export default function DashboardPage() {
       }
     }
     const outstanding = clients.reduce(
-      (s, c) => s + Math.max(c.monthly_value - (receivedByClient.get(c.id) ?? 0), 0),
+      (s, c) => s + Math.max(monthlyEquivalent(c) - (receivedByClient.get(c.id) ?? 0), 0),
       0,
     );
 
     const clientsWithOutstanding = clients.map(c => {
-      const remaining = Math.max(c.monthly_value - (receivedByClient.get(c.id) ?? 0), 0);
+      const remaining = Math.max(monthlyEquivalent(c) - (receivedByClient.get(c.id) ?? 0), 0);
       return { id: c.id, name: c.name, remaining };
     }).filter(c => c.remaining > 0).sort((a, b) => b.remaining - a.remaining).slice(0, 5);
 

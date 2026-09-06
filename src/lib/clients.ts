@@ -13,14 +13,45 @@ export const clientSchema = z.object({
     .regex(/^[0-9+\-\s()]+$/, "Only digits and + - ( ) allowed"),
   email: z.string().email("Enter a valid email"),
   service: z.string().min(1, "Service is required").max(120),
+  // Amount charged per billing cycle (see billing_cycle). For commission clients
+  // this is not a fixed recurring figure — leave 0 and record each payment when a
+  // sale closes.
   monthly_value: z
     .number({ error: "Enter a number" })
     .min(0, "Must be 0 or more"),
+  billing_cycle: z.enum(["monthly", "quarterly", "commission"]),
   status: z.enum(["active", "inactive"]),
   notes: z.string().max(1000).optional().or(z.literal("")),
 });
 
 export type ClientInput = z.infer<typeof clientSchema>;
+export type BillingCycle = ClientInput["billing_cycle"];
+
+// Normalize a client's per-cycle amount to a monthly figure so MRR / expected
+// revenue stay comparable across cycles. Commission clients have no fixed
+// recurring amount, so they contribute 0 to the forecast (their revenue lands
+// as actual payments when sales close).
+export function monthlyEquivalent(c: { monthly_value: number; billing_cycle?: BillingCycle }): number {
+  switch (c.billing_cycle) {
+    case "quarterly":
+      return c.monthly_value / 3;
+    case "commission":
+      return 0;
+    default:
+      return c.monthly_value;
+  }
+}
+
+// Suffix shown after a client's per-cycle amount (e.g. ₹30,000/qtr).
+export function billingCycleSuffix(cycle?: BillingCycle): string {
+  return cycle === "quarterly" ? "/qtr" : cycle === "commission" ? "" : "/mo";
+}
+
+export const BILLING_CYCLE_LABEL: Record<BillingCycle, string> = {
+  monthly: "Monthly",
+  quarterly: "Quarterly",
+  commission: "Commission",
+};
 
 // ---- Types ---------------------------------------------------------------
 

@@ -20,7 +20,7 @@ import { PageHeader } from "@/components/page-header";
 import { listPayments, type PaymentWithClient } from "@/lib/payments";
 import { listExpenses, type Expense } from "@/lib/expenses";
 import { listSalaryPayments, netSalary, type SalaryPayment, listEmployees, type Employee } from "@/lib/salaries";
-import { listClients, type ClientSummary } from "@/lib/clients";
+import { listClients, monthlyEquivalent, type ClientSummary } from "@/lib/clients";
 import { getOpeningBalance, setOpeningBalance, downloadCSV } from "@/lib/statements";
 import { formatDate } from "@/lib/format";
 import { useSettings } from "@/components/settings-provider";
@@ -152,7 +152,7 @@ export default function StatementsPage() {
     }
     return clients.map(c => {
       const received = receivedByClient.get(c.id) ?? 0;
-      const billed = c.monthly_value;
+      const billed = monthlyEquivalent(c);
       const outstanding = Math.max(billed - received, 0);
       return { name: c.name, billed, received, outstanding };
     }).sort((a, b) => b.outstanding - a.outstanding);

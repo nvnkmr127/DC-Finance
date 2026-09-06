@@ -44,6 +44,7 @@ const empty: ClientInput = {
   email: "",
   service: "",
   monthly_value: 0,
+  billing_cycle: "monthly",
   status: "active",
   notes: "",
 };
@@ -82,6 +83,13 @@ export function ClientForm({
   });
 
   const currentMonthlyValue = useWatch({ control, name: "monthly_value" });
+  const billingCycle = useWatch({ control, name: "billing_cycle" });
+  const amountLabel =
+    billingCycle === "quarterly"
+      ? "Amount per Quarter"
+      : billingCycle === "commission"
+        ? "Typical Commission (optional)"
+        : "Monthly Value";
 
   useEffect(() => {
     if (isOpen) {
@@ -175,8 +183,31 @@ export function ClientForm({
                 )}
               />
             </Field>
-            <Field label="Monthly Value" htmlFor="monthly_value" required error={errors.monthly_value?.message}>
+            <Field label="Billing Cycle" htmlFor="billing_cycle" required error={errors.billing_cycle?.message}>
+              <Controller
+                control={control}
+                name="billing_cycle"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger id="billing_cycle" className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="quarterly">Quarterly</SelectItem>
+                      <SelectItem value="commission">Commission (per sale)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            </Field>
+            <Field label={amountLabel} htmlFor="monthly_value" required error={errors.monthly_value?.message}>
               <MoneyInput id="monthly_value" aria-invalid={!!errors.monthly_value} {...register("monthly_value", { valueAsNumber: true })} placeholder="0" />
+              {billingCycle === "commission" && (
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  Commission clients aren&apos;t forecast in monthly revenue — record each payment when a sale closes.
+                </p>
+              )}
               {catalogPrice !== null && catalogUnit !== "month" && (
                 <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-500 flex items-center gap-1">
                   <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />

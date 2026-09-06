@@ -30,6 +30,8 @@ import {
   getClientSummary,
   getClientPayments,
   getClientPricingHistory,
+  billingCycleSuffix,
+  BILLING_CYCLE_LABEL,
   type ClientSummary,
   type Payment,
   type ClientPricingRevision,
@@ -161,9 +163,17 @@ export default function ClientDetailPage() {
                 <span>{client.service}</span>
               </div>
               <div className="flex justify-between border-t pt-3">
-                <span className="text-muted-foreground">Current Monthly Value</span>
+                <span className="text-muted-foreground">
+                  {client.billing_cycle === "commission"
+                    ? "Billing"
+                    : client.billing_cycle === "quarterly"
+                      ? "Amount per Quarter"
+                      : "Current Monthly Value"}
+                </span>
                 <span className="font-semibold tabular-nums text-foreground">
-                  {formatINR(client.monthly_value)}
+                  {client.billing_cycle === "commission"
+                    ? "Commission"
+                    : `${formatINR(client.monthly_value)}${billingCycleSuffix(client.billing_cycle)}`}
                 </span>
               </div>
               {client.notes && (
@@ -221,7 +231,11 @@ export default function ClientDetailPage() {
                       Contract PDF
                     </Button>
                   </div>
-                  <div className="mt-1">Rate: {formatINR(client.monthly_value)}/mo for {client.service}</div>
+                  <div className="mt-1">
+                    {client.billing_cycle === "commission"
+                      ? `Commission-based for ${client.service}`
+                      : `Rate: ${formatINR(client.monthly_value)}${billingCycleSuffix(client.billing_cycle)} (${BILLING_CYCLE_LABEL[client.billing_cycle]}) for ${client.service}`}
+                  </div>
                   <div className="mt-1 text-[11px] text-muted-foreground/80">
                     Future contract price updates will be logged here with timestamps and audit trail.
                   </div>

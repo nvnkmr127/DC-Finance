@@ -54,6 +54,8 @@ import { ClientForm } from "@/components/client-form";
 import {
   listClients,
   deleteClient,
+  monthlyEquivalent,
+  billingCycleSuffix,
   type Client,
   type ClientSummary,
 } from "@/lib/clients";
@@ -64,7 +66,7 @@ const PAGE_SIZE = 10;
 const SORTS: Record<string, (a: ClientSummary, b: ClientSummary) => number> = {
   recent: () => 0, // keep source order (created_at desc from the query)
   name: (a, b) => a.name.localeCompare(b.name),
-  monthly: (a, b) => b.monthly_value - a.monthly_value,
+  monthly: (a, b) => monthlyEquivalent(b) - monthlyEquivalent(a),
   received: (a, b) => b.total_received - a.total_received,
   outstanding: (a, b) => b.outstanding - a.outstanding,
 };
@@ -244,7 +246,16 @@ export default function ClientsPage() {
                   <TableCell>{c.company}</TableCell>
                   <TableCell>{c.service}</TableCell>
                   <TableCell className="text-right tabular-nums">
-                    {formatINR(c.monthly_value)}
+                    {c.billing_cycle === "commission" ? (
+                      <span className="text-muted-foreground">Commission</span>
+                    ) : (
+                      <>
+                        {formatINR(c.monthly_value)}
+                        <span className="text-[10px] font-normal text-muted-foreground">
+                          {billingCycleSuffix(c.billing_cycle)}
+                        </span>
+                      </>
+                    )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums text-emerald-600">
                     {formatINR(c.total_received)}

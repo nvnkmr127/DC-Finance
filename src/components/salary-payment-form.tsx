@@ -56,7 +56,7 @@ export function SalaryPaymentForm({
   onSaved,
   showTrigger = false,
 }: {
-  employees: { id: string; name: string }[];
+  employees: { id: string; name: string; salary?: number }[];
   payment?: SalaryPayment;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -73,6 +73,7 @@ export function SalaryPaymentForm({
     handleSubmit,
     control,
     reset,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<SalaryPaymentInput>({
     resolver: zodResolver(salaryPaymentSchema),
@@ -141,7 +142,17 @@ export function SalaryPaymentForm({
                 control={control}
                 name="employee_id"
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select
+                    value={field.value}
+                    onValueChange={(v) => {
+                      field.onChange(v);
+                      // Auto-fill the base amount from the employee's salary.
+                      const emp = employees.find((e) => e.id === v);
+                      if (emp?.salary != null) {
+                        setValue("amount", emp.salary, { shouldValidate: true, shouldDirty: true });
+                      }
+                    }}
+                  >
                     <SelectTrigger id="employee_id" aria-invalid={!!errors.employee_id} className="w-full">
                       <SelectValue placeholder="Select an employee" />
                     </SelectTrigger>
