@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Mail, Phone, Briefcase, History, TrendingUp, TrendingDown, Pencil } from "lucide-react";
+import { ArrowLeft, Loader2, Mail, Phone, Briefcase, History, TrendingUp, TrendingDown, Pencil, FileText } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -25,6 +25,7 @@ import { PageHeader } from "@/components/page-header";
 import { StatusBadge } from "@/components/status-badge";
 import { MetricCard } from "@/components/metric-card";
 import { ClientForm } from "@/components/client-form";
+import { ContractAddendumDialog } from "@/components/contract-addendum-dialog";
 import {
   getClientSummary,
   getClientPayments,
@@ -41,6 +42,8 @@ export default function ClientDetailPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [pricingHistory, setPricingHistory] = useState<ClientPricingRevision[]>([]);
   const [editOpen, setEditOpen] = useState(false);
+  const [selectedRevision, setSelectedRevision] = useState<ClientPricingRevision | null>(null);
+  const [addendumOpen, setAddendumOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -191,8 +194,34 @@ export default function ClientDetailPage() {
             <CardContent className="space-y-3 p-4 pt-0">
               {pricingHistory.length === 0 ? (
                 <div className="rounded-md border border-dashed p-3 text-xs text-muted-foreground">
-                  <div className="font-medium text-foreground">Baseline Contract</div>
-                  <div>Rate: {formatINR(client.monthly_value)}/mo for {client.service}</div>
+                  <div className="flex items-center justify-between">
+                    <div className="font-medium text-foreground">Baseline Contract</div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="h-6 px-2 text-[10px]"
+                      onClick={() => {
+                        setSelectedRevision({
+                          id: "base",
+                          changed_at: client.created_at,
+                          actor: "Admin",
+                          action: "CREATED",
+                          old_price: null,
+                          new_price: client.monthly_value,
+                          old_service: null,
+                          new_service: client.service,
+                          diff: 0,
+                          percentage_change: null,
+                        });
+                        setAddendumOpen(true);
+                      }}
+                    >
+                      <FileText className="mr-1 h-3 w-3 text-primary" />
+                      Contract PDF
+                    </Button>
+                  </div>
+                  <div className="mt-1">Rate: {formatINR(client.monthly_value)}/mo for {client.service}</div>
                   <div className="mt-1 text-[11px] text-muted-foreground/80">
                     Future contract price updates will be logged here with timestamps and audit trail.
                   </div>
@@ -254,8 +283,23 @@ export default function ClientDetailPage() {
                           </div>
                         )}
 
-                        <div className="mt-0.5 text-[10px] text-muted-foreground/70">
-                          {rev.action === "CREATED" ? "Initial contract" : "Revised"} by {rev.actor || "Admin"}
+                        <div className="mt-1 flex items-center justify-between">
+                          <div className="text-[10px] text-muted-foreground/70">
+                            {rev.action === "CREATED" ? "Initial contract" : "Revised"} by {rev.actor || "Admin"}
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-6 px-1.5 text-[10px] text-primary hover:text-primary/80"
+                            onClick={() => {
+                              setSelectedRevision(rev);
+                              setAddendumOpen(true);
+                            }}
+                          >
+                            <FileText className="mr-1 h-3 w-3" />
+                            Addendum PDF
+                          </Button>
                         </div>
                       </div>
                     );
@@ -265,6 +309,13 @@ export default function ClientDetailPage() {
             </CardContent>
           </Card>
         </div>
+
+        <ContractAddendumDialog
+          open={addendumOpen}
+          onOpenChange={setAddendumOpen}
+          client={client}
+          revision={selectedRevision}
+        />
 
         {/* Totals + payment history */}
         <div className="space-y-4 lg:col-span-2">
