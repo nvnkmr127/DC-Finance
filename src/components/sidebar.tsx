@@ -5,7 +5,9 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   Users,
+  FileText,
   CreditCard,
+  BellRing,
   Receipt,
   RefreshCw,
   Wallet,
@@ -20,7 +22,9 @@ import { useAuth } from "@/components/auth-provider";
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/clients", label: "Clients", icon: Users },
+  { href: "/invoices", label: "Invoices", icon: FileText },
   { href: "/payments", label: "Payments", icon: CreditCard },
+  { href: "/collections", label: "Collections", icon: BellRing },
   { href: "/expenses", label: "Expenses", icon: Receipt },
   { href: "/recurring", label: "Recurring", icon: RefreshCw },
   { href: "/salaries", label: "Salaries", icon: Wallet },
@@ -61,7 +65,7 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 export function Sidebar() {
   const { signOut } = useAuth();
   return (
-    <aside className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
+    <aside className="print-hide hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
       <div className="flex h-16 items-center gap-2 px-6">
         <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
           D

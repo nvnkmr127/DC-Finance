@@ -10,11 +10,22 @@ export const expenseSchema = z.object({
   payment_method: z.string().min(1, "Select a payment method"),
   recurring: z.boolean(),
   notes: z.string().max(1000).optional().or(z.literal("")),
+  receipt_path: z.string().optional().or(z.literal("")),
 });
 
 export type ExpenseInput = z.infer<typeof expenseSchema>;
 
-export type Expense = ExpenseInput & { id: string; created_at: string; updated_at?: string };
+export type Expense = Omit<ExpenseInput, "receipt_path"> & {
+  id: string;
+  created_at: string;
+  updated_at?: string;
+  receipt_path: string | null;
+};
+
+// receipt_path is nullable text; an empty selection must become NULL, not "".
+function normalize(input: ExpenseInput) {
+  return { ...input, receipt_path: input.receipt_path || null };
+}
 
 export async function listExpenses(): Promise<Expense[]> {
   const { data, error } = await getSupabase()
@@ -26,12 +37,12 @@ export async function listExpenses(): Promise<Expense[]> {
 }
 
 export async function createExpense(input: ExpenseInput): Promise<void> {
-  const { error } = await getSupabase().from("expenses").insert(input);
+  const { error } = await getSupabase().from("expenses").insert(normalize(input));
   if (error) throw new Error(error.message);
 }
 
 export async function updateExpense(id: string, input: ExpenseInput): Promise<void> {
-  const { error } = await getSupabase().from("expenses").update(input).eq("id", id);
+  const { error } = await getSupabase().from("expenses").update(normalize(input)).eq("id", id);
   if (error) throw new Error(error.message);
 }
 

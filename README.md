@@ -29,11 +29,13 @@ supabase/        SQL schema, migrations, RLS policies, and an atomic RPC.
 
 ## Data model
 
-`clients`, `employees`, `payments` (→ client), `salary_payments` (→ employee),
-`expenses`, `recurring` (templates), `opening_balances` (per month), and a singleton
-`settings` row. A `client_summary` **view** joins clients with their payment totals and
-outstanding balance. `updated_at` triggers keep timestamps fresh; foreign keys protect
-history (a client with payments can't be deleted).
+`clients`, `employees`, `payments` (→ client, optionally → invoice),
+`invoices` + `invoice_items` (→ client), `salary_payments` (→ employee), `expenses`,
+`recurring` (templates), `opening_balances` (per month), and a singleton `settings` row.
+`client_summary` and `invoice_summary` **views** add payment-derived totals. Receipts for
+expenses and salary payments live in a private `receipts` Storage bucket (signed-URL
+access). `updated_at` triggers keep timestamps fresh; foreign keys protect history (a
+client with payments can't be deleted).
 
 ## Features
 
@@ -44,13 +46,21 @@ history (a client with payments can't be deleted).
 - **Clients** — searchable, sortable, paginated list (monthly value, received,
   outstanding). Add/edit via dialog; delete is blocked while payments exist. Each client
   has a detail page with contact info and a 6-month revenue chart.
-- **Payments** — record and manage client payments (amount, date, method, reference, notes).
-- **Expenses** — business expenses by category, with vendor, method, and date.
+- **Invoices** — create invoices with line items and auto-numbering (`INV-0001`);
+  statuses (draft / sent / paid / partial / cancelled, the last two derived from linked
+  payments); outstanding and overdue totals.
+- **Payments** — record and manage client payments (amount, date, method, reference,
+  notes), optionally linked to an invoice so its balance and status update automatically.
+- **Collections** — aging buckets (not-due / 1–30 / 31–60 / 60+ days), per-invoice days
+  overdue, copy-to-clipboard reminder messages, and reminder logging. (Automated email
+  reminders can be enabled once an email provider such as Resend is connected.)
+- **Expenses** — business expenses by category, with vendor, method, date, and an
+  optional receipt attachment.
 - **Recurring** — templates for repeating bills (monthly / quarterly / yearly) with
   next-due and overdue tracking. "Record payment" **atomically** books an expense *and*
   advances the next-due date in one transaction, so a charge can't be double-recorded.
 - **Salaries** — employees and their salary payments (net = base + bonus − deduction);
-  tracks paid vs pending per employee.
+  tracks paid vs pending per employee, with optional receipt attachments.
 - **Statements** — six report tabs: Income (P&L), Expense (by category), Cash Flow,
   Client Outstanding, Salary, and a filterable Transactions ledger with a running balance.
   Every tab supports **print** and **CSV export**.

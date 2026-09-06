@@ -50,6 +50,7 @@ create table if not exists public.expenses (
   payment_method text not null default 'Bank Transfer',
   recurring      boolean not null default false,
   notes          text,
+  receipt_path   text,
   created_at     timestamptz not null default now(),
   updated_at     timestamptz not null default now()
 );
@@ -78,6 +79,7 @@ create table if not exists public.salary_payments (
   bonus        numeric not null default 0,
   deduction    numeric not null default 0,
   notes        text,
+  receipt_path text,
   created_at   timestamptz not null default now(),
   updated_at   timestamptz not null default now()
 );
@@ -249,6 +251,91 @@ grant all on public.opening_balances to authenticated;
 grant all on public.settings         to authenticated;
 grant select on public.client_summary to authenticated;
 grant execute on function public.record_recurring_payment(uuid, date) to authenticated;
+
+-- ---- Invoicing -----------------------------------------------------------
+-- Invoices + line items; client payments can link to an invoice so outstanding
+-- is invoiced − paid. No tax.
+
+create table if not exists public.invoices (
+  id             uuid primary key default gen_random_uuid(),
+  invoice_number text not null unique,
+  client_id      uuid not null references public.clients(id) on delete restrict,
+  issue_date     date not null default now(),
+  due_date       date not null default now(),
+  status         text not null default 'draft' check (status in ('draft', 'sent', 'cancelled')),
+  notes          text,
+  total          numeric not null default 0 check (total >= 0),
+  last_reminded_at timestamptz,
+  created_at     timestamptz not null default now(),
+  updated_at     timestamptz not null default now()
+);
+
+create table if not exists public.invoice_items (
+  id          uuid primary key default gen_random_uuid(),
+  invoice_id  uuid not null references public.invoices(id) on delete cascade,
+  description text not null,
+  quantity    numeric not null default 1 check (quantity >= 0),
+  unit_price  numeric not null default 0 check (unit_price >= 0),
+  amount      numeric not null default 0 check (amount >= 0)
+);
+
+alter table public.payments
+  add column if not exists invoice_id uuid references public.invoices(id) on delete set null;
+
+create index if not exists invoices_client_id_idx       on public.invoices (client_id);
+create index if not exists invoices_status_idx          on public.invoices (status);
+create index if not exists invoices_issue_date_idx      on public.invoices (issue_date);
+create index if not exists invoice_items_invoice_id_idx on public.invoice_items (invoice_id);
+create index if not exists payments_invoice_id_idx      on public.payments (invoice_id);
+
+drop trigger if exists set_updated_at on public.invoices;
+create trigger set_updated_at before update on public.invoices
+  for each row execute function public.set_updated_at();
+
+create or replace view public.invoice_summary
+with (security_invoker = true) as
+select
+  i.*,
+  c.name    as client_name,
+  c.company as client_company,
+  coalesce(sum(p.amount), 0)::numeric as paid,
+  greatest(i.total - coalesce(sum(p.amount), 0), 0)::numeric as balance,
+  case
+    when i.status = 'cancelled' then 'cancelled'
+    when i.total > 0 and coalesce(sum(p.amount), 0) >= i.total then 'paid'
+    when coalesce(sum(p.amount), 0) > 0 then 'partial'
+    else i.status
+  end as display_status
+from public.invoices i
+join public.clients c on c.id = i.client_id
+left join public.payments p on p.invoice_id = i.id
+group by i.id, c.name, c.company;
+
+alter table public.invoices      enable row level security;
+alter table public.invoice_items enable row level security;
+drop policy if exists "invoices authenticated all"      on public.invoices;
+drop policy if exists "invoice_items authenticated all" on public.invoice_items;
+create policy "invoices authenticated all"      on public.invoices      for all to authenticated using (true) with check (true);
+create policy "invoice_items authenticated all" on public.invoice_items for all to authenticated using (true) with check (true);
+grant all on public.invoices      to authenticated;
+grant all on public.invoice_items to authenticated;
+grant select on public.invoice_summary to authenticated;
+
+-- ---- Receipts storage ----------------------------------------------------
+-- Private bucket for expense / salary receipt attachments (signed-URL access).
+
+insert into storage.buckets (id, name, public)
+values ('receipts', 'receipts', false)
+on conflict (id) do nothing;
+
+drop policy if exists "receipts read"   on storage.objects;
+drop policy if exists "receipts insert" on storage.objects;
+drop policy if exists "receipts update" on storage.objects;
+drop policy if exists "receipts delete" on storage.objects;
+create policy "receipts read"   on storage.objects for select to authenticated using (bucket_id = 'receipts');
+create policy "receipts insert" on storage.objects for insert to authenticated with check (bucket_id = 'receipts');
+create policy "receipts update" on storage.objects for update to authenticated using (bucket_id = 'receipts');
+create policy "receipts delete" on storage.objects for delete to authenticated using (bucket_id = 'receipts');
 
 -- ---- Config row (not seed data) ------------------------------------------
 

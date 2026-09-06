@@ -55,15 +55,17 @@ import {
 } from "@/components/ui/alert-dialog";
 import { PageHeader } from "@/components/page-header";
 import { MetricCard } from "@/components/metric-card";
-import { PaymentForm } from "@/components/payment-form";
+import { PaymentForm, type PaymentInvoiceOption } from "@/components/payment-form";
 import { listPayments, deletePayment, type PaymentWithClient } from "@/lib/payments";
 import { listClients, type ClientSummary } from "@/lib/clients";
+import { listInvoices } from "@/lib/invoices";
 import { formatINR, formatDate } from "@/lib/format";
 import { useSettings } from "@/components/settings-provider";
 
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<PaymentWithClient[]>([]);
   const [clients, setClients] = useState<ClientSummary[]>([]);
+  const [invoiceOpts, setInvoiceOpts] = useState<PaymentInvoiceOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,9 +86,17 @@ export default function PaymentsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [p, c] = await Promise.all([listPayments(), listClients()]);
+      const [p, c, inv] = await Promise.all([listPayments(), listClients(), listInvoices()]);
       setPayments(p);
       setClients(c);
+      setInvoiceOpts(
+        inv.map((i) => ({
+          id: i.id,
+          invoice_number: i.invoice_number,
+          client_id: i.client_id,
+          balance: i.balance,
+        })),
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load payments");
     } finally {
@@ -158,7 +168,7 @@ export default function PaymentsPage() {
       <PageHeader
         title="Payments"
         description={loading ? "Loading…" : `${payments.length} payments`}
-        action={<PaymentForm showTrigger clients={clients} onSaved={refetch} />}
+        action={<PaymentForm showTrigger clients={clients} invoices={invoiceOpts} onSaved={refetch} />}
       />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -351,6 +361,7 @@ export default function PaymentsPage() {
       {/* Edit (controlled) */}
       <PaymentForm
         clients={clients}
+        invoices={invoiceOpts}
         payment={editing ?? undefined}
         open={editing !== null}
         onOpenChange={(o) => !o && setEditing(null)}

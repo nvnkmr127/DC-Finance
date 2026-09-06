@@ -55,9 +55,15 @@ export const salaryPaymentSchema = z.object({
   bonus: z.number({ error: "Enter a number" }).min(0, "Must be 0 or more"),
   deduction: z.number({ error: "Enter a number" }).min(0, "Must be 0 or more"),
   notes: z.string().max(1000).optional().or(z.literal("")),
+  receipt_path: z.string().optional().or(z.literal("")),
 });
 
 export type SalaryPaymentInput = z.infer<typeof salaryPaymentSchema>;
+
+// receipt_path is nullable text; an empty selection must become NULL, not "".
+function normalizeSalary(input: SalaryPaymentInput) {
+  return { ...input, receipt_path: input.receipt_path || null };
+}
 
 export type SalaryPayment = {
   id: string;
@@ -67,6 +73,7 @@ export type SalaryPayment = {
   deduction: number;
   payment_date: string;
   notes: string | null;
+  receipt_path: string | null;
   created_at: string;
   employees: { name: string; designation: string } | null;
 };
@@ -90,12 +97,12 @@ export async function listSalaryPayments(): Promise<SalaryPayment[]> {
 }
 
 export async function createSalaryPayment(input: SalaryPaymentInput): Promise<void> {
-  const { error } = await getSupabase().from("salary_payments").insert(input);
+  const { error } = await getSupabase().from("salary_payments").insert(normalizeSalary(input));
   if (error) throw new Error(error.message);
 }
 
 export async function updateSalaryPayment(id: string, input: SalaryPaymentInput): Promise<void> {
-  const { error } = await getSupabase().from("salary_payments").update(input).eq("id", id);
+  const { error } = await getSupabase().from("salary_payments").update(normalizeSalary(input)).eq("id", id);
   if (error) throw new Error(error.message);
 }
 

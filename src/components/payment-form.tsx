@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm, useWatch, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -39,6 +39,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 const emptyValues = (): PaymentInput => ({
   client_id: "",
+  invoice_id: "",
   amount: 0,
   payment_date: today(),
   payment_method: "Bank Transfer",
@@ -46,8 +47,16 @@ const emptyValues = (): PaymentInput => ({
   notes: "",
 });
 
+export type PaymentInvoiceOption = {
+  id: string;
+  invoice_number: string;
+  client_id: string;
+  balance: number;
+};
+
 export function PaymentForm({
   clients,
+  invoices = [],
   payment,
   open,
   onOpenChange,
@@ -55,6 +64,7 @@ export function PaymentForm({
   showTrigger = false,
 }: {
   clients: { id: string; name: string; company: string }[];
+  invoices?: PaymentInvoiceOption[];
   payment?: PaymentWithClient;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -73,11 +83,20 @@ export function PaymentForm({
     handleSubmit,
     control,
     reset,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<PaymentInput>({
     resolver: zodResolver(paymentSchema),
     defaultValues: emptyValues(),
   });
+
+  const selectedClient = useWatch({ control, name: "client_id" });
+  // Open invoices for the chosen client (plus the one already linked, if editing).
+  const clientInvoices = invoices.filter(
+    (inv) =>
+      inv.client_id === selectedClient &&
+      (inv.balance > 0 || inv.id === payment?.invoice_id),
+  );
 
   useEffect(() => {
     if (!isOpen) return;
@@ -85,6 +104,7 @@ export function PaymentForm({
       payment
         ? {
             client_id: payment.client_id,
+            invoice_id: payment.invoice_id ?? "",
             amount: payment.amount,
             payment_date: payment.payment_date,
             payment_method: payment.payment_method as PaymentInput["payment_method"],
@@ -134,7 +154,13 @@ export function PaymentForm({
                 control={control}
                 name="client_id"
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select
+                    value={field.value}
+                    onValueChange={(v) => {
+                      field.onChange(v);
+                      setValue("invoice_id", ""); // clear invoice when client changes
+                    }}
+                  >
                     <SelectTrigger id="client_id" aria-invalid={!!errors.client_id} className="w-full">
                       <SelectValue placeholder="Select a client" />
                     </SelectTrigger>
@@ -149,6 +175,33 @@ export function PaymentForm({
                 )}
               />
             </Field>
+
+            {clientInvoices.length > 0 && (
+              <Field label="Apply to Invoice" htmlFor="invoice_id" error={errors.invoice_id?.message}>
+                <Controller
+                  control={control}
+                  name="invoice_id"
+                  render={({ field }) => (
+                    <Select
+                      value={field.value || "none"}
+                      onValueChange={(v) => field.onChange(v === "none" ? "" : v)}
+                    >
+                      <SelectTrigger id="invoice_id" className="w-full">
+                        <SelectValue placeholder="No invoice" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No invoice (ad-hoc)</SelectItem>
+                        {clientInvoices.map((inv) => (
+                          <SelectItem key={inv.id} value={inv.id}>
+                            {inv.invoice_number} · balance {inv.balance}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                />
+              </Field>
+            )}
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Amount" htmlFor="amount" required error={errors.amount?.message}>

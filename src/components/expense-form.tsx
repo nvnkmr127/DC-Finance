@@ -28,6 +28,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, MoneyInput } from "@/components/form-field";
+import { ReceiptField } from "@/components/receipt-field";
 import {
   expenseSchema,
   createExpense,
@@ -48,6 +49,7 @@ const empty: ExpenseInput = {
   payment_method: "Bank Transfer",
   recurring: false,
   notes: "",
+  receipt_path: "",
 };
 
 export function ExpenseForm({
@@ -95,6 +97,7 @@ export function ExpenseForm({
               payment_method: expense.payment_method,
               recurring: expense.recurring,
               notes: expense.notes ?? "",
+              receipt_path: expense.receipt_path ?? "",
             }
           : empty,
       );
@@ -213,6 +216,16 @@ export function ExpenseForm({
 
             <Field label="Notes" htmlFor="notes" error={errors.notes?.message}>
               <Textarea id="notes" {...register("notes")} placeholder="Optional notes" rows={2} />
+            </Field>
+
+            <Field label="Receipt" htmlFor="receipt">
+              <Controller
+                control={control}
+                name="receipt_path"
+                render={({ field }) => (
+                  <ReceiptField value={field.value ?? ""} onChange={field.onChange} />
+                )}
+              />
             </Field>
           </div>
 

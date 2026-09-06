@@ -22,7 +22,7 @@ export function Topbar() {
   const { signOut } = useAuth();
 
   return (
-    <header className="flex h-16 items-center gap-3 border-b bg-background px-4 md:hidden">
+    <header className="print-hide flex h-16 items-center gap-3 border-b bg-background px-4 md:hidden">
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger asChild>
           <Button variant="outline" size="icon">

@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field, MoneyInput } from "@/components/form-field";
+import { ReceiptField } from "@/components/receipt-field";
 import {
   salaryPaymentSchema,
   createSalaryPayment,
@@ -44,6 +45,7 @@ const empty: SalaryPaymentInput = {
   bonus: 0,
   deduction: 0,
   notes: "",
+  receipt_path: "",
 };
 
 export function SalaryPaymentForm({
@@ -94,6 +96,7 @@ export function SalaryPaymentForm({
             bonus: payment.bonus,
             deduction: payment.deduction,
             notes: payment.notes ?? "",
+            receipt_path: payment.receipt_path ?? "",
           }
         : empty,
     );
@@ -176,6 +179,16 @@ export function SalaryPaymentForm({
 
             <Field label="Notes" htmlFor="notes" error={errors.notes?.message}>
               <Textarea id="notes" {...register("notes")} placeholder="Optional notes" rows={2} />
+            </Field>
+
+            <Field label="Receipt" htmlFor="receipt">
+              <Controller
+                control={control}
+                name="receipt_path"
+                render={({ field }) => (
+                  <ReceiptField value={field.value ?? ""} onChange={field.onChange} />
+                )}
+              />
             </Field>
           </div>
 

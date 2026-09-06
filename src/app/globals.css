@@ -134,3 +134,16 @@
       0 2px 8px -1px oklch(0.45 0.08 162 / 0.07);
   }
 }
+/* Print: hide app chrome (sidebar/topbar/controls) and print on white. */
+@media print {
+  .print-hide {
+    display: none !important;
+  }
+  body {
+    background: white !important;
+  }
+  main {
+    padding: 0 !important;
+    background: white !important;
+  }
+}
