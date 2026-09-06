@@ -19,9 +19,7 @@ export default function SettingsPage() {
   // Local state for the form
   const [companyName, setCompanyName] = useState("");
   const [currency, setCurrency] = useState("INR");
-  const [openingBalance, setOpeningBalance] = useState("0");
-  const [financialYearStart, setFinancialYearStart] = useState("04-01");
-  
+
   const [categories, setCategories] = useState<string[]>([]);
   const [newCat, setNewCat] = useState("");
   
@@ -32,8 +30,6 @@ export default function SettingsPage() {
     if (settings) {
       setCompanyName(settings.company_name);
       setCurrency(settings.default_currency);
-      setOpeningBalance(settings.global_opening_balance.toString());
-      setFinancialYearStart(settings.financial_year_start);
       setCategories([...settings.expense_categories]);
       setPaymentMethods([...settings.payment_methods]);
     }
@@ -77,8 +73,6 @@ export default function SettingsPage() {
       await updateSettings({
         company_name: companyName,
         default_currency: currency,
-        global_opening_balance: parseFloat(openingBalance) || 0,
-        financial_year_start: financialYearStart,
         expense_categories: categories,
         payment_methods: paymentMethods,
       });
@@ -126,33 +120,15 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Financial Preferences</CardTitle>
-            <CardDescription>Default currency and financial year settings.</CardDescription>
+            <CardDescription>Default currency used across the app.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Default Currency</Label>
-                <Input
-                  value={currency}
-                  onChange={(e) => setCurrency(e.target.value)}
-                  placeholder="INR"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Financial Year Start</Label>
-                <Input
-                  value={financialYearStart}
-                  onChange={(e) => setFinancialYearStart(e.target.value)}
-                  placeholder="MM-DD (e.g. 04-01)"
-                />
-              </div>
-            </div>
             <div className="space-y-2">
-              <Label>Global Opening Balance</Label>
+              <Label>Default Currency</Label>
               <Input
-                type="number"
-                value={openingBalance}
-                onChange={(e) => setOpeningBalance(e.target.value)}
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value)}
+                placeholder="INR"
               />
             </div>
           </CardContent>
@@ -183,6 +159,8 @@ export default function SettingsPage() {
                 >
                   {c}
                   <button
+                    type="button"
+                    aria-label={`Remove ${c}`}
                     onClick={() => removeCategory(c)}
                     className="ml-1 text-muted-foreground hover:text-foreground"
                   >
@@ -219,6 +197,8 @@ export default function SettingsPage() {
                 >
                   {m}
                   <button
+                    type="button"
+                    aria-label={`Remove ${m}`}
                     onClick={() => removeMethod(m)}
                     className="ml-1 text-muted-foreground hover:text-foreground"
                   >

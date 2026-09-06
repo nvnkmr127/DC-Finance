@@ -148,7 +148,7 @@ export default function DashboardPage() {
 
     const clientsWithOutstanding = clients.map(c => {
       const remaining = Math.max(c.monthly_value - (receivedByClient.get(c.id) ?? 0), 0);
-      return { name: c.name, remaining };
+      return { id: c.id, name: c.name, remaining };
     }).filter(c => c.remaining > 0).sort((a, b) => b.remaining - a.remaining).slice(0, 5);
 
     // Recurring Expenses for the month (total active recurring amounts)
@@ -184,7 +184,7 @@ export default function DashboardPage() {
     }
     const pendingSalaries = employees.filter(e => e.status === "active").map(e => {
       const remaining = Math.max(e.salary - (paidByEmployee.get(e.id) ?? 0), 0);
-      return { name: e.name, remaining };
+      return { id: e.id, name: e.name, remaining };
     }).filter(e => e.remaining > 0).sort((a, b) => b.remaining - a.remaining);
 
     return {
@@ -282,8 +282,8 @@ export default function DashboardPage() {
                 <p className="text-sm text-muted-foreground">All clients are paid up.</p>
               ) : (
                 <ul className="divide-y">
-                  {d.clientsWithOutstanding.map((c, i) => (
-                    <li key={i} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                  {d.clientsWithOutstanding.map((c) => (
+                    <li key={c.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
                       <p className="truncate text-sm font-medium">{c.name}</p>
                       <span className="text-sm font-semibold tabular-nums text-amber-600">{formatCurrency(c.remaining)}</span>
                     </li>
@@ -296,8 +296,8 @@ export default function DashboardPage() {
                 <p className="text-sm text-muted-foreground">All salaries are paid.</p>
               ) : (
                 <ul className="divide-y">
-                  {d.pendingSalaries.map((e, i) => (
-                    <li key={i} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                  {d.pendingSalaries.map((e) => (
+                    <li key={e.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
                       <p className="truncate text-sm font-medium">{e.name}</p>
                       <span className="text-sm font-semibold tabular-nums text-amber-600">{formatCurrency(e.remaining)}</span>
                     </li>

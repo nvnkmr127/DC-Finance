@@ -96,11 +96,6 @@ export default function ClientsPage() {
     refetch();
   }, []);
 
-  // Reset to the first page whenever the result set changes.
-  useEffect(() => {
-    setPage(1);
-  }, [query, status, sort]);
-
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = rows.filter((c) => {
@@ -125,6 +120,7 @@ export default function ClientsPage() {
     setQuery("");
     setStatus("all");
     setSort("recent");
+    setPage(1);
   }
 
   const blockedByPayments = (deleting?.payment_count ?? 0) > 0;
@@ -155,12 +151,15 @@ export default function ClientsPage() {
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setQuery(e.target.value);
+              setPage(1);
+            }}
             placeholder="Search clients…"
             className="pl-9"
           />
         </div>
-        <Select value={status} onValueChange={setStatus}>
+        <Select value={status} onValueChange={(v) => { setStatus(v); setPage(1); }}>
           <SelectTrigger className="sm:w-40">
             <SelectValue placeholder="All statuses" />
           </SelectTrigger>
@@ -170,7 +169,7 @@ export default function ClientsPage() {
             <SelectItem value="inactive">Inactive</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={sort} onValueChange={setSort}>
+        <Select value={sort} onValueChange={(v) => { setSort(v); setPage(1); }}>
           <SelectTrigger className="sm:w-52">
             <SelectValue placeholder="Sort" />
           </SelectTrigger>

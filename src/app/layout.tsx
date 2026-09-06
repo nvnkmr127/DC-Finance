@@ -6,6 +6,7 @@ import { Topbar } from "@/components/topbar";
 import { Toaster } from "@/components/ui/sonner";
 import { SettingsProvider } from "@/components/settings-provider";
 import { ThemeProvider } from "@/components/theme-provider";
+import { AuthProvider } from "@/components/auth-provider";
 
 const manrope = Manrope({
   variable: "--font-sans",
@@ -41,16 +42,18 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <SettingsProvider>
-          <div className="flex min-h-screen">
-            <Sidebar />
-            <div className="flex min-w-0 flex-1 flex-col">
-              <Topbar />
-              <main className="flex-1 min-w-0 bg-muted/30 p-4 sm:p-6 lg:p-8">{children}</main>
+          <AuthProvider>
+            <SettingsProvider>
+            <div className="flex min-h-screen">
+              <Sidebar />
+              <div className="flex min-w-0 flex-1 flex-col">
+                <Topbar />
+                <main className="flex-1 min-w-0 bg-muted/30 p-4 sm:p-6 lg:p-8">{children}</main>
+              </div>
             </div>
-          </div>
-          <Toaster />
-        </SettingsProvider>
+            <Toaster />
+          </SettingsProvider>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

@@ -83,6 +83,22 @@ export function calculateNextDate(
   return `${year}-${month}-${day}`;
 }
 
+// Books the expense for a recurring template AND advances its next payment date
+// in a single database transaction (see the record_recurring_payment RPC).
+// Doing both atomically prevents a booked expense with an un-advanced date, which
+// would otherwise let the same charge be recorded twice. Returns the new date.
+export async function recordRecurringPayment(
+  id: string,
+  expenseDate: string,
+): Promise<string> {
+  const { data, error } = await getSupabase().rpc("record_recurring_payment", {
+    p_recurring_id: id,
+    p_expense_date: expenseDate,
+  });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
 // Advances the next payment date for a recurring template without creating an expense.
 export async function advanceRecurringDate(
   id: string,

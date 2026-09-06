@@ -10,9 +10,12 @@ import {
   RefreshCw,
   Wallet,
   Settings,
+  LogOut,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/components/auth-provider";
 
 const nav = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -56,6 +59,7 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function Sidebar() {
+  const { signOut } = useAuth();
   return (
     <aside className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
       <div className="flex h-16 items-center gap-2 px-6">
@@ -70,9 +74,20 @@ export function Sidebar() {
       <div className="py-2">
         <SidebarNav />
       </div>
-      <div className="mt-auto flex items-center justify-between border-t border-sidebar-border px-4 py-3">
-        <span className="text-xs text-sidebar-foreground/60">Theme</span>
-        <ThemeToggle />
+      <div className="mt-auto flex flex-col gap-1 border-t border-sidebar-border px-4 py-3">
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-sidebar-foreground/60">Theme</span>
+          <ThemeToggle />
+        </div>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={signOut}
+          className="justify-start px-2 text-sidebar-foreground/70 hover:text-sidebar-foreground"
+        >
+          <LogOut className="h-4 w-4" />
+          Sign out
+        </Button>
       </div>
     </aside>
   );

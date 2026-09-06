@@ -1,7 +1,9 @@
+"use client";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { ArrowDownRight, ArrowUpRight, type LucideIcon } from "lucide-react";
-import { formatINR } from "@/lib/format";
+import { useSettings } from "@/components/settings-provider";
 
 export function StatCard({
   title,
@@ -20,6 +22,8 @@ export function StatCard({
   delta?: number; // signed % change vs previous period
   invertDelta?: boolean; // true when a rise is bad (e.g. expenses)
 }) {
+  const { formatCurrency } = useSettings();
+
   const accentColor = {
     default: "text-foreground",
     positive: "text-emerald-600",
@@ -40,7 +44,7 @@ export function StatCard({
       <CardContent>
         <div className="flex items-center justify-between gap-2">
           <div className={cn("text-2xl font-semibold tracking-tight", accentColor)}>
-            {formatINR(value)}
+            {formatCurrency(value)}
           </div>
           {delta !== undefined && (
             <span

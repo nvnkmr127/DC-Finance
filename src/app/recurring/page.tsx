@@ -70,9 +70,9 @@ import {
   daysUntil,
   calculateNextDate,
   advanceRecurringDate,
+  recordRecurringPayment,
   type Recurring,
 } from "@/lib/recurring";
-import { createExpense } from "@/lib/expenses";
 import { useSettings } from "@/components/settings-provider";
 import { formatINR, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -104,6 +104,7 @@ export default function RecurringPage() {
   const [isRecordingSubmitting, setIsRecordingSubmitting] = useState(false);
 
   async function refetch() {
+    setLoading(true);
     setError(null);
     try {
       const data = await listRecurring();
@@ -116,23 +117,7 @@ export default function RecurringPage() {
   }
 
   useEffect(() => {
-    let ignore = false;
-    listRecurring()
-      .then((data) => {
-        if (!ignore) {
-          setRows(data);
-          setLoading(false);
-        }
-      })
-      .catch((e) => {
-        if (!ignore) {
-          setError(e instanceof Error ? e.message : "Failed to load recurring expenses");
-          setLoading(false);
-        }
-      });
-    return () => {
-      ignore = true;
-    };
+    refetch();
   }, []);
 
   const summary = useMemo(() => {
@@ -213,24 +198,9 @@ export default function RecurringPage() {
     if (!recording) return;
     setIsRecordingSubmitting(true);
     try {
-      // 1. Explicitly create the actual expense transaction
-      await createExpense({
-        category: recording.category,
-        description: recording.name,
-        amount: recording.amount,
-        expense_date: recordDate,
-        payment_method: recording.payment_method || "Bank Transfer",
-        vendor: recording.vendor || "",
-        recurring: true,
-        notes: recording.notes ? `[Recurring: ${recording.frequency}] ${recording.notes}` : `[Recurring: ${recording.frequency}]`,
-      });
-
-      // 2. Automatically advance the template's next payment date based on frequency
-      const nextDate = await advanceRecurringDate(
-        recording.id,
-        recording.next_payment_date,
-        recording.frequency,
-      );
+      // Books the expense and advances the next payment date in one transaction,
+      // so a partial failure can't leave a booked charge that gets recorded twice.
+      const nextDate = await recordRecurringPayment(recording.id, recordDate);
 
       toast.success(
         `Recorded ${formatINR(recording.amount)} expense. Next payment date advanced to ${formatDate(nextDate)}.`,

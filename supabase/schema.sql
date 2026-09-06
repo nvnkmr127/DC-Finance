@@ -154,9 +154,63 @@ from public.clients c
 left join public.payments p on p.client_id = c.id
 group by c.id;
 
+-- ---- Money guards --------------------------------------------------------
+-- Defense in depth: the client-side zod schemas validate amounts, but a direct
+-- API call could bypass them. Reject negative money at the database too.
+
+do $$
+begin
+  begin alter table public.payments        add constraint payments_amount_nonneg   check (amount >= 0); exception when duplicate_object then null; end;
+  begin alter table public.expenses        add constraint expenses_amount_nonneg   check (amount >= 0); exception when duplicate_object then null; end;
+  begin alter table public.recurring       add constraint recurring_amount_nonneg  check (amount >= 0); exception when duplicate_object then null; end;
+  begin alter table public.salary_payments add constraint salary_amount_nonneg     check (amount >= 0 and bonus >= 0 and deduction >= 0); exception when duplicate_object then null; end;
+end $$;
+
+-- ---- Atomic recurring payment --------------------------------------------
+-- Books a recurring template's expense AND advances its next date in one
+-- transaction, so a partial failure can't lead to a double-recorded charge.
+
+create or replace function public.record_recurring_payment(
+  p_recurring_id uuid,
+  p_expense_date date
+) returns date
+language plpgsql
+security invoker
+as $$
+declare
+  r public.recurring;
+  v_months int;
+  v_next date;
+begin
+  select * into r from public.recurring where id = p_recurring_id for update;
+  if not found then
+    raise exception 'Recurring template % not found', p_recurring_id;
+  end if;
+
+  insert into public.expenses (
+    category, description, vendor, amount, expense_date,
+    payment_method, recurring, notes
+  )
+  values (
+    r.category, r.name, coalesce(r.vendor, ''), r.amount, p_expense_date,
+    coalesce(r.payment_method, 'Bank Transfer'), true,
+    case
+      when coalesce(r.notes, '') <> '' then '[Recurring: ' || r.frequency || '] ' || r.notes
+      else '[Recurring: ' || r.frequency || ']'
+    end
+  );
+
+  v_months := case r.frequency when 'Monthly' then 1 when 'Quarterly' then 3 else 12 end;
+  v_next := (r.next_payment_date + (v_months || ' months')::interval)::date;
+  update public.recurring set next_payment_date = v_next where id = r.id;
+  return v_next;
+end;
+$$;
+
 -- ---- Access --------------------------------------------------------------
--- Internal tool, no auth yet. Allow the anon / publishable key full access.
--- ponytail: permissive policy — restrict to `authenticated` once auth lands.
+-- Signed-in users only. The anon/publishable key can no longer touch data;
+-- a valid Supabase Auth session is required for every query. Create at least
+-- one user (dashboard → Authentication → Users) so someone can sign in.
 
 alter table public.clients         enable row level security;
 alter table public.employees       enable row level security;
@@ -167,33 +221,34 @@ alter table public.salary_payments enable row level security;
 alter table public.opening_balances enable row level security;
 alter table public.settings        enable row level security;
 
-drop policy if exists "clients anon all"   on public.clients;
-drop policy if exists "employees anon all" on public.employees;
-drop policy if exists "payments anon all"  on public.payments;
-drop policy if exists "expenses anon all"  on public.expenses;
-drop policy if exists "recurring anon all" on public.recurring;
-drop policy if exists "salary anon all"    on public.salary_payments;
-drop policy if exists "balances anon all"  on public.opening_balances;
-drop policy if exists "settings anon all"  on public.settings;
-create policy "clients anon all"   on public.clients         for all to anon using (true) with check (true);
-create policy "employees anon all" on public.employees       for all to anon using (true) with check (true);
-create policy "payments anon all"  on public.payments        for all to anon using (true) with check (true);
-create policy "expenses anon all"  on public.expenses        for all to anon using (true) with check (true);
-create policy "recurring anon all" on public.recurring       for all to anon using (true) with check (true);
-create policy "salary anon all"    on public.salary_payments for all to anon using (true) with check (true);
-create policy "balances anon all"  on public.opening_balances for all to anon using (true) with check (true);
-create policy "settings anon all"  on public.settings        for all to anon using (true) with check (true);
+drop policy if exists "clients authenticated all"   on public.clients;
+drop policy if exists "employees authenticated all" on public.employees;
+drop policy if exists "payments authenticated all"  on public.payments;
+drop policy if exists "expenses authenticated all"  on public.expenses;
+drop policy if exists "recurring authenticated all" on public.recurring;
+drop policy if exists "salary_payments authenticated all" on public.salary_payments;
+drop policy if exists "opening_balances authenticated all" on public.opening_balances;
+drop policy if exists "settings authenticated all"  on public.settings;
+create policy "clients authenticated all"   on public.clients         for all to authenticated using (true) with check (true);
+create policy "employees authenticated all" on public.employees       for all to authenticated using (true) with check (true);
+create policy "payments authenticated all"  on public.payments        for all to authenticated using (true) with check (true);
+create policy "expenses authenticated all"  on public.expenses        for all to authenticated using (true) with check (true);
+create policy "recurring authenticated all" on public.recurring       for all to authenticated using (true) with check (true);
+create policy "salary_payments authenticated all" on public.salary_payments for all to authenticated using (true) with check (true);
+create policy "opening_balances authenticated all" on public.opening_balances for all to authenticated using (true) with check (true);
+create policy "settings authenticated all"  on public.settings        for all to authenticated using (true) with check (true);
 
-grant usage on schema public to anon;
-grant all on public.clients         to anon;
-grant all on public.employees       to anon;
-grant all on public.payments        to anon;
-grant all on public.expenses        to anon;
-grant all on public.recurring       to anon;
-grant all on public.salary_payments to anon;
-grant all on public.opening_balances to anon;
-grant all on public.settings         to anon;
-grant select on public.client_summary to anon;
+grant usage on schema public to authenticated;
+grant all on public.clients         to authenticated;
+grant all on public.employees       to authenticated;
+grant all on public.payments        to authenticated;
+grant all on public.expenses        to authenticated;
+grant all on public.recurring       to authenticated;
+grant all on public.salary_payments to authenticated;
+grant all on public.opening_balances to authenticated;
+grant all on public.settings         to authenticated;
+grant select on public.client_summary to authenticated;
+grant execute on function public.record_recurring_payment(uuid, date) to authenticated;
 
 -- ---- Config row (not seed data) ------------------------------------------
 

@@ -176,11 +176,13 @@ export default function StatementsPage() {
   // Transactions Statement
   const transactionData = useMemo(() => {
     const allTxs = [];
-    
+
     for (const p of payments) {
       allTxs.push({
         id: p.id,
         date: p.payment_date,
+        createdAt: p.created_at,
+        clientId: p.client_id,
         type: "Income",
         description: p.notes || "Payment received",
         entity: p.clients?.name || "Unknown",
@@ -193,6 +195,8 @@ export default function StatementsPage() {
       allTxs.push({
         id: e.id,
         date: e.expense_date,
+        createdAt: e.created_at,
+        clientId: null,
         type: "Expense",
         description: e.description,
         entity: e.vendor || "-",
@@ -205,6 +209,8 @@ export default function StatementsPage() {
       allTxs.push({
         id: s.id,
         date: s.payment_date,
+        createdAt: s.created_at,
+        clientId: null,
         type: "Expense",
         description: s.notes || "Salary payment",
         entity: s.employees?.name || "Unknown",
@@ -214,18 +220,15 @@ export default function StatementsPage() {
       });
     }
 
-    // Sort chronologically ascending
-    allTxs.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    // Chronological order, tie-broken by created_at so the running balance below
+    // is deterministic when several transactions share a date.
+    allTxs.sort(
+      (a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt),
+    );
 
-    // Calculate absolute running balance starting from the beginning of time
-    // using the earliest known opening balance or just 0 if none.
-    // For simplicity, we calculate a rolling balance across all transactions, 
-    // then filter the view, so the balance is accurate to reality.
-    // If we wanted to incorporate the manual opening_balance from a specific month, 
-    // we would inject it here, but typically the manual balance just sets a point in time. 
-    // We will just do a standard running balance from 0 for the sake of the ledger, or
-    // use the month's opening balance if they just want a localized ledger.
-    // Given the prompt, a simple running balance is fine.
+    // All-time running net position (from zero). This is a net-since-inception
+    // ledger; it intentionally does not use the per-month opening_balances,
+    // which drive the separate Cash Flow tab.
     let currentBalance = 0;
     const txsWithBalance = allTxs.map(tx => {
       currentBalance = currentBalance + tx.income - tx.expense;
@@ -236,7 +239,7 @@ export default function StatementsPage() {
     const filtered = txsWithBalance.filter(tx => {
       const inDateRange = tx.date >= txFrom && tx.date <= txTo;
       const matchType = txType === "all" || tx.type.toLowerCase() === txType;
-      const matchClient = txClient === "all" || (tx.type === "Income" ? payments.find(p => p.id === tx.id)?.client_id === txClient : true);
+      const matchClient = txClient === "all" || (tx.type === "Income" ? tx.clientId === txClient : true);
       const matchCategory = txCategory === "all" || tx.category === txCategory;
       const search = txSearch.toLowerCase();
       const matchSearch = search === "" || 
@@ -246,8 +249,10 @@ export default function StatementsPage() {
       return inDateRange && matchType && matchClient && matchCategory && matchSearch;
     });
 
-    // Sort descending for display (newest first)
-    return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    // Sort descending for display (newest first), stable on same-date rows.
+    return filtered.sort(
+      (a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt),
+    );
 
   }, [payments, expenses, salaries, txFrom, txTo, txType, txClient, txCategory, txSearch]);
 

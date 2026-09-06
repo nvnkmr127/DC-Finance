@@ -213,10 +213,12 @@ export function BreakdownDonut({
 export function HorizontalBar({
   data,
   nameKey,
+  dataKey = "amount",
   color = "var(--chart-2)",
 }: {
   data: Record<string, string | number>[];
   nameKey: string;
+  dataKey?: string;
   color?: string;
 }) {
   if (data.length === 0) {
@@ -246,7 +248,7 @@ export function HorizontalBar({
           width={140}
         />
         <Tooltip content={<TooltipBox />} cursor={{ fill: "var(--muted)" }} />
-        <Bar dataKey="amount" name="Amount" fill={color} radius={[0, 4, 4, 0]} />
+        <Bar dataKey={dataKey} name="Amount" fill={color} radius={[0, 4, 4, 0]} />
       </BarChart>
     </ResponsiveContainer>
   );
