@@ -32,7 +32,7 @@ import { listExpenses, type Expense } from "@/lib/expenses";
 import { listSalaryPayments, netSalary, type SalaryPayment, listEmployees, type Employee } from "@/lib/salaries";
 import { listClients, type ClientSummary } from "@/lib/clients";
 import { listRecurring, daysUntil, type Recurring } from "@/lib/recurring";
-import { formatDate } from "@/lib/format";
+import { formatDate, financialYear } from "@/lib/format";
 import { useSettings } from "@/components/settings-provider";
 import { cn } from "@/lib/utils";
 
@@ -86,7 +86,8 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { formatCurrency } = useSettings();
+  const { formatCurrency, settings } = useSettings();
+  const fyStart = settings?.financial_year_start || "04-01";
 
   useEffect(() => {
     (async () => {
@@ -173,6 +174,19 @@ export default function DashboardPage() {
       .sort((a, b) => b.amount - a.amount)
       .slice(0, 5);
 
+    // Financial-year-to-date totals.
+    const fy = financialYear(fyStart);
+    const inFy = (dateStr: string) => dateStr >= fy.start && dateStr < fy.end;
+    const fyRevenue = payments.filter((p) => inFy(p.payment_date)).reduce((s, p) => s + p.amount, 0);
+    const fyExpenses = expenses.filter((e) => inFy(e.expense_date)).reduce((s, e) => s + e.amount, 0);
+    const fySalaries = salaries.filter((p) => inFy(p.payment_date)).reduce((s, p) => s + netSalary(p), 0);
+    const fytd = {
+      label: fy.label,
+      revenue: fyRevenue,
+      expenses: fyExpenses + fySalaries,
+      profit: fyRevenue - fyExpenses - fySalaries,
+    };
+
     const upcoming = recurring.filter((r) => r.active && daysUntil(r.next_payment_date) <= 30).sort((a,b) => new Date(a.next_payment_date).getTime() - new Date(b.next_payment_date).getTime()).slice(0, 5);
 
     // Pending salaries
@@ -191,6 +205,7 @@ export default function DashboardPage() {
       selected,
       outstanding,
       totalRecurring,
+      fytd,
       months,
       categories,
       topClients,
@@ -200,7 +215,7 @@ export default function DashboardPage() {
       recentPayments: payments.slice(0, 5),
       recentExpenses: expenses.slice(0, 5),
     };
-  }, [payments, expenses, salaries, employees, clients, recurring, month]);
+  }, [payments, expenses, salaries, employees, clients, recurring, month, fyStart]);
 
   const monthLabel = new Date(`${month}-01`).toLocaleString("en-IN", {
     month: "long",
@@ -249,6 +264,29 @@ export default function DashboardPage() {
             <StatCard title="Outstanding" value={d.outstanding} icon={Clock} accent="warning" hint="Billing − received" />
             <StatCard title="Recurring Expenses" value={d.totalRecurring} icon={RefreshCw} accent="default" hint="Monthly active recurring" />
           </div>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Financial Year to Date · {d.fytd.label}</CardTitle>
+              <CardDescription>Cumulative since the start of the financial year</CardDescription>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Revenue</p>
+                <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-600">{formatCurrency(d.fytd.revenue)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Expenses (incl. salaries)</p>
+                <p className="mt-1 text-xl font-semibold tabular-nums text-red-600">{formatCurrency(d.fytd.expenses)}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Net Profit</p>
+                <p className={cn("mt-1 text-xl font-semibold tabular-nums", d.fytd.profit >= 0 ? "text-emerald-700" : "text-red-700")}>
+                  {formatCurrency(d.fytd.profit)}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <Card className="lg:col-span-2">

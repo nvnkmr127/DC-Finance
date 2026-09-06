@@ -5,6 +5,7 @@ export type Settings = {
   company_name: string;
   company_logo: string | null;
   default_currency: string;
+  financial_year_start: string;
   expense_categories: string[];
   payment_methods: string[];
   email_reminders_enabled: boolean;
@@ -26,6 +27,7 @@ export async function getSettings(): Promise<Settings> {
         company_name: "Digicloudify Finance",
         company_logo: null,
         default_currency: "INR",
+        financial_year_start: "04-01",
         expense_categories: ["Office", "Software", "Advertising", "Equipment", "Travel", "Internet", "Electricity", "Freelancers", "Salary", "Other"],
         payment_methods: ["Bank Transfer", "UPI", "Cash", "Card", "Other"],
         email_reminders_enabled: false,

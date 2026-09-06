@@ -1,3 +1,21 @@
+// Current financial year range from an "MM-DD" start (e.g. "04-01" = Apr 1).
+// Returns ISO date bounds [start, end) and a label like "FY 2025–26".
+export function financialYear(fyStart: string, ref: Date = new Date()) {
+  const [mm, dd] = fyStart.split("-").map(Number);
+  const y = ref.getFullYear();
+  const startThisYear = new Date(y, (mm || 4) - 1, dd || 1);
+  const startYear = ref >= startThisYear ? y : y - 1;
+  const start = new Date(startYear, (mm || 4) - 1, dd || 1);
+  const end = new Date(startYear + 1, (mm || 4) - 1, dd || 1); // exclusive
+  const iso = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return {
+    start: iso(start),
+    end: iso(end),
+    label: `FY ${startYear}–${String((startYear + 1) % 100).padStart(2, "0")}`,
+  };
+}
+
 // Indian-style formatting helpers (₹1,25,000 grouping via en-IN locale).
 
 export function formatINR(amount: number, withPaise = false): string {

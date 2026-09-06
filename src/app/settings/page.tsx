@@ -21,6 +21,7 @@ export default function SettingsPage() {
   // Local state for the form
   const [companyName, setCompanyName] = useState("");
   const [currency, setCurrency] = useState("INR");
+  const [fyStart, setFyStart] = useState("04-01");
 
   const [categories, setCategories] = useState<string[]>([]);
   const [newCat, setNewCat] = useState("");
@@ -49,6 +50,7 @@ export default function SettingsPage() {
     if (settings) {
       setCompanyName(settings.company_name);
       setCurrency(settings.default_currency);
+      setFyStart(settings.financial_year_start);
       setCategories([...settings.expense_categories]);
       setPaymentMethods([...settings.payment_methods]);
       setEmailRemindersEnabled(settings.email_reminders_enabled);
@@ -94,6 +96,7 @@ export default function SettingsPage() {
       await updateSettings({
         company_name: companyName,
         default_currency: currency,
+        financial_year_start: fyStart.trim() || "04-01",
         expense_categories: categories,
         payment_methods: paymentMethods,
         email_reminders_enabled: emailRemindersEnabled,
@@ -146,13 +149,23 @@ export default function SettingsPage() {
             <CardDescription>Default currency used across the app.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label>Default Currency</Label>
-              <Input
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                placeholder="INR"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Default Currency</Label>
+                <Input
+                  value={currency}
+                  onChange={(e) => setCurrency(e.target.value)}
+                  placeholder="INR"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Financial Year Start</Label>
+                <Input
+                  value={fyStart}
+                  onChange={(e) => setFyStart(e.target.value)}
+                  placeholder="MM-DD (e.g. 04-01)"
+                />
+              </div>
             </div>
           </CardContent>
         </Card>
