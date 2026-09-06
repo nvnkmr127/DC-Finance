@@ -7,6 +7,8 @@ export type Settings = {
   default_currency: string;
   expense_categories: string[];
   payment_methods: string[];
+  email_reminders_enabled: boolean;
+  reminder_from_email: string | null;
   updated_at: string;
 };
 
@@ -26,6 +28,8 @@ export async function getSettings(): Promise<Settings> {
         default_currency: "INR",
         expense_categories: ["Office", "Software", "Advertising", "Equipment", "Travel", "Internet", "Electricity", "Freelancers", "Salary", "Other"],
         payment_methods: ["Bank Transfer", "UPI", "Cash", "Card", "Other"],
+        email_reminders_enabled: false,
+        reminder_from_email: null,
         updated_at: new Date().toISOString()
       };
     }

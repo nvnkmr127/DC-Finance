@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import { updateSettings } from "@/lib/settings";
 import { useSettings } from "@/components/settings-provider";
 
@@ -26,12 +27,17 @@ export default function SettingsPage() {
   const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
   const [newMethod, setNewMethod] = useState("");
 
+  const [emailRemindersEnabled, setEmailRemindersEnabled] = useState(false);
+  const [reminderFromEmail, setReminderFromEmail] = useState("");
+
   useEffect(() => {
     if (settings) {
       setCompanyName(settings.company_name);
       setCurrency(settings.default_currency);
       setCategories([...settings.expense_categories]);
       setPaymentMethods([...settings.payment_methods]);
+      setEmailRemindersEnabled(settings.email_reminders_enabled);
+      setReminderFromEmail(settings.reminder_from_email ?? "");
     }
   }, [settings]);
 
@@ -75,6 +81,8 @@ export default function SettingsPage() {
         default_currency: currency,
         expense_categories: categories,
         payment_methods: paymentMethods,
+        email_reminders_enabled: emailRemindersEnabled,
+        reminder_from_email: reminderFromEmail.trim() || null,
       });
       await refreshSettings();
       toast.success("Settings saved successfully");
@@ -206,6 +214,46 @@ export default function SettingsPage() {
                   </button>
                 </div>
               ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle>Email Reminders</CardTitle>
+            <CardDescription>
+              Send overdue-invoice reminders by email from the Collections page (via Resend).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <label className="flex items-start gap-3 rounded-md border bg-muted/30 px-3 py-2.5">
+              <Checkbox
+                id="email_reminders"
+                checked={emailRemindersEnabled}
+                onCheckedChange={(v) => setEmailRemindersEnabled(v === true)}
+                className="mt-0.5"
+              />
+              <div>
+                <span className="text-sm font-medium">Enable email reminders</span>
+                <p className="text-xs text-muted-foreground">
+                  When on, Collections shows a “Send email” action for invoices whose client has an
+                  email address.
+                </p>
+              </div>
+            </label>
+            <div className="space-y-2">
+              <Label>From email</Label>
+              <Input
+                type="email"
+                value={reminderFromEmail}
+                onChange={(e) => setReminderFromEmail(e.target.value)}
+                placeholder="billing@yourdomain.com"
+                disabled={!emailRemindersEnabled}
+              />
+              <p className="text-xs text-muted-foreground">
+                Must be an address on a domain verified in Resend. The Resend API key is configured
+                on the server (<code>RESEND_API_KEY</code>), not here.
+              </p>
             </div>
           </CardContent>
         </Card>

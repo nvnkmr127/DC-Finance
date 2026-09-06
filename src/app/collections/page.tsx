@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, AlertCircle, Copy, BellRing, CheckCircle2 } from "lucide-react";
+import { Loader2, AlertCircle, Copy, BellRing, CheckCircle2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,8 @@ import {
 import { PageHeader } from "@/components/page-header";
 import { MetricCard } from "@/components/metric-card";
 import { listInvoices, logReminder, type InvoiceSummary } from "@/lib/invoices";
+import { listClients } from "@/lib/clients";
+import { sendReminderEmail } from "@/lib/reminders";
 import { formatDate } from "@/lib/format";
 import { useSettings } from "@/components/settings-provider";
 import { cn } from "@/lib/utils";
@@ -30,17 +32,23 @@ const daysBetween = (isoDate: string) => {
 
 export default function CollectionsPage() {
   const [rows, setRows] = useState<InvoiceSummary[]>([]);
+  const [emailByClient, setEmailByClient] = useState<Record<string, string>>({});
+  const [sendingId, setSendingId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const { formatCurrency, settings } = useSettings();
   const company = settings?.company_name || "our company";
+  const emailEnabled = !!settings?.email_reminders_enabled;
+  const fromEmail = settings?.reminder_from_email ?? "";
 
   async function refetch() {
     setLoading(true);
     setError(null);
     try {
-      setRows(await listInvoices());
+      const [inv, clients] = await Promise.all([listInvoices(), listClients()]);
+      setRows(inv);
+      setEmailByClient(Object.fromEntries(clients.map((c) => [c.id, c.email ?? ""])));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load collections");
     } finally {
@@ -102,6 +110,28 @@ export default function CollectionsPage() {
       refetch();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to log reminder");
+    }
+  }
+
+  async function sendEmail(r: InvoiceSummary & { overdueDays: number }) {
+    const to = emailByClient[r.client_id];
+    if (!to) return toast.error("This client has no email address");
+    if (!fromEmail) return toast.error("Set a From email in Settings first");
+    setSendingId(r.id);
+    try {
+      await sendReminderEmail({
+        to,
+        from: fromEmail,
+        subject: `Payment reminder — ${r.invoice_number}`,
+        text: reminderMessage(r),
+      });
+      await logReminder(r.id);
+      toast.success(`Reminder emailed to ${to}`);
+      refetch();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to send email");
+    } finally {
+      setSendingId(null);
     }
   }
 
@@ -183,6 +213,26 @@ export default function CollectionsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
+                      {emailEnabled && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          disabled={sendingId === r.id || !emailByClient[r.client_id]}
+                          onClick={() => sendEmail(r)}
+                          title={
+                            emailByClient[r.client_id]
+                              ? `Email reminder to ${emailByClient[r.client_id]}`
+                              : "Client has no email address"
+                          }
+                        >
+                          {sendingId === r.id ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <Mail className="h-4 w-4" />
+                          )}
+                          Email
+                        </Button>
+                      )}
                       <Button variant="outline" size="sm" onClick={() => copyMessage(r)} title="Copy reminder message">
                         <Copy className="h-4 w-4" />
                         Copy
@@ -201,8 +251,9 @@ export default function CollectionsPage() {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        Copy a reminder message to send via email or WhatsApp, then log it here. Automated email
-        reminders can be enabled once an email provider (e.g. Resend) is connected.
+        {emailEnabled
+          ? "Email sends directly via Resend to the client’s email. You can also copy the message to send manually."
+          : "Copy a reminder message to send via email or WhatsApp, then log it here. Turn on email reminders in Settings to send directly via Resend."}
       </p>
     </div>
   );

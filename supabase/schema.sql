@@ -100,6 +100,8 @@ create table if not exists public.settings (
   financial_year_start   text not null default '04-01',
   expense_categories     text[] not null default array['Office', 'Software', 'Advertising', 'Equipment', 'Travel', 'Internet', 'Electricity', 'Freelancers', 'Salary', 'Other'],
   payment_methods        text[] not null default array['Bank Transfer', 'UPI', 'Cash', 'Card', 'Other'],
+  email_reminders_enabled boolean not null default false,
+  reminder_from_email    text,
   created_at             timestamptz not null default now(),
   updated_at             timestamptz not null default now()
 );
