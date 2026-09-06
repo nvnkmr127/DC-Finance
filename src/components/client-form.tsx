@@ -28,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { Field, MoneyInput } from "@/components/form-field";
 import { ServiceSearch } from "@/components/service-search";
+import { unitSuffix } from "@/lib/format";
 import {
   clientSchema,
   createClient,
@@ -63,6 +64,7 @@ export function ClientForm({
   const { formatCurrency } = useSettings();
   const [internalOpen, setInternalOpen] = useState(false);
   const [catalogPrice, setCatalogPrice] = useState<number | null>(null);
+  const [catalogUnit, setCatalogUnit] = useState<string>("month");
   const controlled = open !== undefined;
   const isOpen = controlled ? open : internalOpen;
   const setOpen = controlled ? onOpenChange! : setInternalOpen;
@@ -85,6 +87,7 @@ export function ClientForm({
     if (isOpen) {
       reset(client ? { ...client } : empty);
       setCatalogPrice(null);
+      setCatalogUnit("month");
     }
   }, [isOpen, client, reset]);
 
@@ -146,14 +149,24 @@ export function ClientForm({
                     value={field.value}
                     onChange={field.onChange}
                     onSelectService={(selectedService) => {
+                      const unit = selectedService.unit || "month";
                       field.onChange(selectedService.name);
                       setCatalogPrice(selectedService.price);
-                      if (selectedService.price > 0) {
+                      setCatalogUnit(unit);
+                      // Only auto-fill the monthly value for genuinely monthly
+                      // services. A per-day / per-piece / one-time / scoped rate
+                      // is NOT a monthly figure — writing it into monthly_value
+                      // would silently inflate MRR everywhere it's summed.
+                      if (selectedService.price > 0 && unit === "month") {
                         setValue("monthly_value", selectedService.price, {
                           shouldValidate: true,
                           shouldDirty: true,
                         });
-                        toast.info(`Selected ${selectedService.name} (pricing auto-filled)`);
+                        toast.info(`Selected ${selectedService.name} (monthly pricing auto-filled)`);
+                      } else if (unit === "scoped" || selectedService.price === 0) {
+                        toast.info(`Selected ${selectedService.name} — quoted per requirement; set the monthly value manually`);
+                      } else {
+                        toast.info(`Selected ${selectedService.name} — ${formatCurrency(selectedService.price)}${unitSuffix(unit)}, not monthly; set the monthly value manually`);
                       }
                     }}
                     error={!!errors.service}
@@ -164,7 +177,15 @@ export function ClientForm({
             </Field>
             <Field label="Monthly Value" htmlFor="monthly_value" required error={errors.monthly_value?.message}>
               <MoneyInput id="monthly_value" aria-invalid={!!errors.monthly_value} {...register("monthly_value", { valueAsNumber: true })} placeholder="0" />
-              {catalogPrice !== null && currentMonthlyValue !== catalogPrice && (
+              {catalogPrice !== null && catalogUnit !== "month" && (
+                <p className="mt-1 text-[11px] text-amber-600 dark:text-amber-500 flex items-center gap-1">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-amber-500" />
+                  {catalogUnit === "scoped"
+                    ? "Catalog service is quoted per requirement — enter this client's monthly value."
+                    : `Catalog rate is ${formatCurrency(catalogPrice)}${unitSuffix(catalogUnit)}, not monthly — enter this client's monthly value.`}
+                </p>
+              )}
+              {catalogPrice !== null && catalogUnit === "month" && currentMonthlyValue !== catalogPrice && (
                 <p className="mt-1 text-[11px] text-muted-foreground flex items-center gap-1">
                   <span className="inline-block h-1.5 w-1.5 rounded-full bg-primary" />
                   Custom client pricing (standard: {formatCurrency(catalogPrice)}/mo)

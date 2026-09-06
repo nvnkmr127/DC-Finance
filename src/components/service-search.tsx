@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { searchServices, createService, type Service } from "@/lib/services";
 import { useSettings } from "@/components/settings-provider";
+import { unitSuffix, SERVICE_UNITS } from "@/lib/format";
 
 type ServiceSearchProps = {
   id?: string;
@@ -39,6 +40,7 @@ export function ServiceSearch({
   const [customPrice, setCustomPrice] = useState("");
   const [showCustomCreator, setShowCustomCreator] = useState(false);
   const [customName, setCustomName] = useState("");
+  const [customUnit, setCustomUnit] = useState("month");
   const [savingCustom, setSavingCustom] = useState(false);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -80,7 +82,7 @@ export function ServiceSearch({
     setHighlightedIndex(-1);
   };
 
-  const handleCreateCustom = async (nameToUse: string, priceToUse: string) => {
+  const handleCreateCustom = async (nameToUse: string, priceToUse: string, unitToUse: string) => {
     const trimmedName = nameToUse.trim();
     if (!trimmedName) {
       toast.error("Please enter a service name");
@@ -93,11 +95,17 @@ export function ServiceSearch({
       const created = await createService({
         name: trimmedName,
         price: parsedPrice,
+        unit: unitToUse,
       });
-      toast.success(`Created "${trimmedName}" with custom price ${formatCurrency(parsedPrice)}/mo`);
+      const priceLabel =
+        unitToUse === "scoped"
+          ? "quoted per requirement"
+          : `${formatCurrency(parsedPrice)}${unitSuffix(unitToUse)}`;
+      toast.success(`Created "${trimmedName}" at ${priceLabel}`);
       handleSelect(created);
       setCustomPrice("");
       setCustomName("");
+      setCustomUnit("month");
       setShowCustomCreator(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to create custom service");
@@ -218,8 +226,16 @@ export function ServiceSearch({
                       )}
                     </div>
                     <div className="shrink-0 text-right font-semibold tabular-nums text-primary">
-                      {formatCurrency(service.price)}
-                      <span className="text-[10px] font-normal text-muted-foreground">/mo</span>
+                      {service.unit === "scoped" ? (
+                        "Quoted"
+                      ) : (
+                        <>
+                          {formatCurrency(service.price)}
+                          <span className="text-[10px] font-normal text-muted-foreground">
+                            {unitSuffix(service.unit)}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </li>
                 );
@@ -246,7 +262,7 @@ export function ServiceSearch({
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        handleCreateCustom(value, customPrice);
+                        handleCreateCustom(value, customPrice, "month");
                       }
                     }}
                   />
@@ -255,7 +271,7 @@ export function ServiceSearch({
                   type="button"
                   size="sm"
                   disabled={savingCustom}
-                  onClick={() => handleCreateCustom(value, customPrice)}
+                  onClick={() => handleCreateCustom(value, customPrice, "month")}
                   className="h-7 px-2.5 text-xs shrink-0"
                 >
                   {savingCustom ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save & Apply"}
@@ -302,20 +318,33 @@ export function ServiceSearch({
                     min="0"
                     value={customPrice}
                     onChange={(e) => setCustomPrice(e.target.value)}
-                    placeholder={`Monthly price (${currency})`}
+                    placeholder={customUnit === "scoped" ? "Quoted" : `Price (${currency})`}
+                    disabled={customUnit === "scoped"}
                     className="h-7 bg-background text-xs tabular-nums"
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        handleCreateCustom(customName, customPrice);
+                        handleCreateCustom(customName, customPrice, customUnit);
                       }
                     }}
                   />
+                  <select
+                    value={customUnit}
+                    onChange={(e) => setCustomUnit(e.target.value)}
+                    aria-label="Pricing unit"
+                    className="h-7 rounded-md border bg-background px-1.5 text-xs"
+                  >
+                    {SERVICE_UNITS.map((u) => (
+                      <option key={u} value={u}>
+                        {u === "month" ? "per month" : u === "scoped" ? "scoped" : u.replace(/-/g, " ")}
+                      </option>
+                    ))}
+                  </select>
                   <Button
                     type="button"
                     size="sm"
                     disabled={savingCustom || !customName.trim()}
-                    onClick={() => handleCreateCustom(customName, customPrice)}
+                    onClick={() => handleCreateCustom(customName, customPrice, customUnit)}
                     className="h-7 px-2.5 text-xs shrink-0"
                   >
                     {savingCustom ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save & Select"}

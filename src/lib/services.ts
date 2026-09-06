@@ -4,6 +4,7 @@ export type Service = {
   id: string;
   name: string;
   price: number;
+  unit?: string;
   description?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -12,17 +13,18 @@ export type Service = {
 export type ServiceInput = {
   name: string;
   price: number;
+  unit?: string;
   description?: string | null;
 };
 
 // Fallback seed services if database table is not migrated yet
 const DEFAULT_SERVICES: Service[] = [
-  { id: "srv-1", name: "Cloud Hosting & Infrastructure", price: 15000, description: "Managed cloud servers & monitoring" },
-  { id: "srv-2", name: "Web Application Development", price: 45000, description: "Custom full-stack web development" },
-  { id: "srv-3", name: "SEO & Performance Optimization", price: 20000, description: "Monthly SEO audits and speed optimization" },
-  { id: "srv-4", name: "DevOps & CI/CD Pipelines", price: 35000, description: "Automated deployment pipelines and Docker setup" },
-  { id: "srv-5", name: "IT Support & Maintenance", price: 25000, description: "Ongoing technical support and bug fixes" },
-  { id: "srv-6", name: "Mobile App Maintenance", price: 30000, description: "iOS and Android updates & maintenance" },
+  { id: "srv-1", name: "Cloud Hosting & Infrastructure", price: 15000, unit: "month", description: "Managed cloud servers & monitoring" },
+  { id: "srv-2", name: "Web Application Development", price: 45000, unit: "month", description: "Custom full-stack web development" },
+  { id: "srv-3", name: "SEO & Performance Optimization", price: 20000, unit: "month", description: "Monthly SEO audits and speed optimization" },
+  { id: "srv-4", name: "DevOps & CI/CD Pipelines", price: 35000, unit: "month", description: "Automated deployment pipelines and Docker setup" },
+  { id: "srv-5", name: "IT Support & Maintenance", price: 25000, unit: "month", description: "Ongoing technical support and bug fixes" },
+  { id: "srv-6", name: "Mobile App Maintenance", price: 30000, unit: "month", description: "iOS and Android updates & maintenance" },
 ];
 
 const LOCAL_STORAGE_KEY = "dc_services_cache";
@@ -92,6 +94,7 @@ export async function createService(input: ServiceInput): Promise<Service> {
     id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `srv-${Date.now()}`,
     name: input.name.trim(),
     price: Number(input.price) || 0,
+    unit: input.unit || "month",
     description: input.description?.trim() || null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -103,6 +106,7 @@ export async function createService(input: ServiceInput): Promise<Service> {
       .insert({
         name: newService.name,
         price: newService.price,
+        unit: newService.unit,
         description: newService.description,
       })
       .select()
@@ -128,6 +132,7 @@ export async function updateService(id: string, input: Partial<ServiceInput>): P
     const updates: Record<string, unknown> = {};
     if (input.name !== undefined) updates.name = input.name.trim();
     if (input.price !== undefined) updates.price = Number(input.price) || 0;
+    if (input.unit !== undefined) updates.unit = input.unit || "month";
     if (input.description !== undefined) updates.description = input.description?.trim() || null;
 
     const { data, error } = await getSupabase()

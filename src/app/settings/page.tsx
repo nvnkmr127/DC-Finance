@@ -12,6 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { updateSettings } from "@/lib/settings";
 import { exportAllData } from "@/lib/backup";
 import { listServices, createService, updateService, deleteService, type Service } from "@/lib/services";
+import { unitSuffix } from "@/lib/format";
 import { useSettings } from "@/components/settings-provider";
 
 export default function SettingsPage() {
@@ -160,7 +161,11 @@ export default function SettingsPage() {
       const updated = await updateService(s.id, { price });
       if (updated) {
         setServices((prev) => prev.map((item) => (item.id === s.id ? updated : item)));
-        toast.success(`Updated pricing for "${s.name}" to ${formatCurrency(price)}/mo`);
+        toast.success(
+          s.unit === "scoped"
+            ? `Updated "${s.name}" (quoted per requirement)`
+            : `Updated pricing for "${s.name}" to ${formatCurrency(price)}${unitSuffix(s.unit)}`,
+        );
       }
       setEditingServiceId(null);
     } catch {
@@ -416,8 +421,16 @@ export default function SettingsPage() {
                       ) : (
                         <>
                           <span className="font-semibold text-primary tabular-nums">
-                            {formatCurrency(s.price)}
-                            <span className="text-xs font-normal text-muted-foreground">/mo</span>
+                            {s.unit === "scoped" ? (
+                              "Quoted"
+                            ) : (
+                              <>
+                                {formatCurrency(s.price)}
+                                <span className="text-xs font-normal text-muted-foreground">
+                                  {unitSuffix(s.unit)}
+                                </span>
+                              </>
+                            )}
                           </span>
                           <Button
                             type="button"

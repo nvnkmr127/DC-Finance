@@ -1,14 +1,8 @@
 "use client";
 
 import React from "react";
-import { Printer, FileText, Download, CheckCircle2, TrendingUp, TrendingDown } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-} from "@/components/ui/dialog";
+import { Printer, FileText } from "lucide-react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { type ClientSummary, type ClientPricingRevision } from "@/lib/clients";
 import { useSettings } from "@/components/settings-provider";

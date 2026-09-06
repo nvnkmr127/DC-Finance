@@ -38,6 +38,39 @@ export function formatDate(iso: string): string {
   });
 }
 
+// Service pricing units → the suffix shown after a price (e.g. ₹6,000/day).
+// Single source of truth for both display and the create <select>. Unknown or
+// missing units fall back to no suffix so legacy/uncached rows never show a
+// wrong "/mo". `scoped` shows no figure at all — the price is "Quoted".
+export const SERVICE_UNIT_SUFFIX: Record<string, string> = {
+  month: "/mo",
+  "one-time": " one-time",
+  day: "/day",
+  "half-day": "/half-day",
+  project: "/project",
+  session: "/session",
+  each: " each",
+  page: "/page",
+  set: "/set",
+  email: "/email",
+  "per-1000-words": "/1,000 words",
+  minute: "/min",
+  video: "/video",
+  reel: "/reel",
+  episode: "/episode",
+  image: "/image",
+  product: "/product",
+  property: "/property",
+  sku: "/SKU",
+  scoped: "",
+};
+
+export const SERVICE_UNITS = Object.keys(SERVICE_UNIT_SUFFIX);
+
+export function unitSuffix(unit?: string | null): string {
+  return SERVICE_UNIT_SUFFIX[unit ?? "month"] ?? "";
+}
+
 // Compact ₹ for chart axes: ₹1.25L, ₹2Cr.
 export function formatINRCompact(amount: number): string {
   if (Math.abs(amount) >= 1_00_00_000)
