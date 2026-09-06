@@ -39,9 +39,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const supabase = getSupabase();
     supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
+      if (!data.session) {
+        setSession(null);
+        setLoading(false);
+        return;
+      }
+      supabase.auth.getUser().then(({ error }) => {
+        if (error) {
+          supabase.auth.signOut();
+          setSession(null);
+        } else {
+          setSession(data.session);
+        }
+        setLoading(false);
+      });
     });
+
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
     });

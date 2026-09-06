@@ -18,24 +18,21 @@ export async function getSettings(): Promise<Settings> {
     .from("settings")
     .select("*")
     .eq("id", 1)
-    .single();
+    .maybeSingle();
 
-  if (error) {
-    if (error.code === 'PGRST116' || error.code === 'PGRST205') { // No rows found or table doesn't exist
-      return {
-        id: 1,
-        company_name: "Digicloudify Finance",
-        company_logo: null,
-        default_currency: "INR",
-        financial_year_start: "04-01",
-        expense_categories: ["Office", "Software", "Advertising", "Equipment", "Travel", "Internet", "Electricity", "Freelancers", "Salary", "Other"],
-        payment_methods: ["Bank Transfer", "UPI", "Cash", "Card", "Other"],
-        email_reminders_enabled: false,
-        reminder_from_email: null,
-        updated_at: new Date().toISOString()
-      };
-    }
-    throw error;
+  if (error || !data) {
+    return {
+      id: 1,
+      company_name: "Digicloudify Finance",
+      company_logo: null,
+      default_currency: "INR",
+      financial_year_start: "04-01",
+      expense_categories: ["Office", "Software", "Advertising", "Equipment", "Travel", "Internet", "Electricity", "Freelancers", "Salary", "Other"],
+      payment_methods: ["Bank Transfer", "UPI", "Cash", "Card", "Other"],
+      email_reminders_enabled: false,
+      reminder_from_email: null,
+      updated_at: new Date().toISOString()
+    };
   }
   return data;
 }
