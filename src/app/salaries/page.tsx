@@ -38,6 +38,7 @@ import { MetricCard } from "@/components/metric-card";
 import { StatusBadge } from "@/components/status-badge";
 import { EmployeeForm } from "@/components/employee-form";
 import { SalaryPaymentForm } from "@/components/salary-payment-form";
+import { BulkSalaryForm } from "@/components/bulk-salary-form";
 import {
   listEmployees,
   listSalaryPayments,
@@ -344,7 +345,10 @@ export default function SalariesPage() {
                 </Button>
               )}
             </div>
-            <SalaryPaymentForm showTrigger employees={activeEmployees} onSaved={refetch} />
+            <div className="flex gap-2">
+              <BulkSalaryForm showTrigger employees={activeEmployees} onSaved={refetch} />
+              <SalaryPaymentForm showTrigger employees={activeEmployees} onSaved={refetch} />
+            </div>
           </div>
           <div className="rounded-lg border bg-card">
             <Table>

@@ -101,6 +101,16 @@ export async function createSalaryPayment(input: SalaryPaymentInput): Promise<vo
   if (error) throw new Error(error.message);
 }
 
+// Record many salary payments in one insert (bulk payroll run). All-or-nothing:
+// a single failing row rejects the whole batch.
+export async function createSalaryPaymentsBulk(inputs: SalaryPaymentInput[]): Promise<void> {
+  if (inputs.length === 0) return;
+  const { error } = await getSupabase()
+    .from("salary_payments")
+    .insert(inputs.map(normalizeSalary));
+  if (error) throw new Error(error.message);
+}
+
 export async function updateSalaryPayment(id: string, input: SalaryPaymentInput): Promise<void> {
   const { error } = await getSupabase().from("salary_payments").update(normalizeSalary(input)).eq("id", id);
   if (error) throw new Error(error.message);

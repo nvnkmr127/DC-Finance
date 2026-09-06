@@ -92,12 +92,7 @@ export default function PaymentsPage() {
     setLoading(true);
     setError(null);
     try {
-      const [p, c, inv, prj] = await Promise.all([
-        listPayments(),
-        listClients(),
-        listInvoices(),
-        listProjects(),
-      ]);
+      const [p, c, inv] = await Promise.all([listPayments(), listClients(), listInvoices()]);
       setPayments(p);
       setClients(c);
       setInvoiceOpts(
@@ -108,14 +103,21 @@ export default function PaymentsPage() {
           balance: i.balance,
         })),
       );
-      setProjectOpts(
-        prj.map((p) => ({
-          id: p.id,
-          name: p.name,
-          client_id: p.client_id,
-          balance: p.balance,
-        })),
-      );
+      // Projects are secondary here — if the projects table isn't migrated yet,
+      // don't let it break the whole payments page. Just skip the project picker.
+      try {
+        const prj = await listProjects();
+        setProjectOpts(
+          prj.map((p) => ({
+            id: p.id,
+            name: p.name,
+            client_id: p.client_id,
+            balance: p.balance,
+          })),
+        );
+      } catch {
+        setProjectOpts([]);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load payments");
     } finally {
@@ -142,10 +144,31 @@ export default function PaymentsPage() {
     };
   }, [payments]);
 
+  // Resolve what a payment was applied to (invoice # or project name) from the
+  // already-loaded option lists — no extra query needed.
+  const invoiceNumberById = useMemo(
+    () => new Map(invoiceOpts.map((i) => [i.id, i.invoice_number])),
+    [invoiceOpts],
+  );
+  const projectNameById = useMemo(
+    () => new Map(projectOpts.map((p) => [p.id, p.name])),
+    [projectOpts],
+  );
+  const appliedTo = (p: PaymentWithClient): { kind: "invoice" | "project"; id: string; label: string } | null => {
+    if (p.invoice_id) return { kind: "invoice", id: p.invoice_id, label: invoiceNumberById.get(p.invoice_id) ?? "Invoice" };
+    if (p.project_id) return { kind: "project", id: p.project_id, label: projectNameById.get(p.project_id) ?? "Project" };
+    return null;
+  };
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const list = payments.filter((p) => {
-      const haystack = `${p.clients?.name ?? ""} ${p.clients?.company ?? ""} ${p.reference_number ?? ""} ${p.notes ?? ""}`.toLowerCase();
+      const linked = p.invoice_id
+        ? invoiceNumberById.get(p.invoice_id) ?? ""
+        : p.project_id
+          ? projectNameById.get(p.project_id) ?? ""
+          : "";
+      const haystack = `${p.clients?.name ?? ""} ${p.clients?.company ?? ""} ${p.reference_number ?? ""} ${p.notes ?? ""} ${linked}`.toLowerCase();
       const matchesQuery = !q || haystack.includes(q);
       const matchesMonth = !month || p.payment_date.startsWith(month);
       const matchesClient = client === "all" || p.client_id === client;
@@ -157,7 +180,7 @@ export default function PaymentsPage() {
         ? b.payment_date.localeCompare(a.payment_date)
         : a.payment_date.localeCompare(b.payment_date),
     );
-  }, [payments, query, month, client, method, sort]);
+  }, [payments, query, month, client, method, sort, invoiceNumberById, projectNameById]);
 
   const hasFilters = query !== "" || month !== "" || client !== "all" || method !== "all" || sort !== "newest";
 
@@ -280,6 +303,7 @@ export default function PaymentsPage() {
               <TableHead>Date</TableHead>
               <TableHead>Client</TableHead>
               <TableHead className="text-right">Amount</TableHead>
+              <TableHead>Applied To</TableHead>
               <TableHead>Payment Method</TableHead>
               <TableHead>Reference</TableHead>
               <TableHead className="w-10" />
@@ -288,13 +312,13 @@ export default function PaymentsPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center">
+                <TableCell colSpan={7} className="h-32 text-center">
                   <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
                 </TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="h-32 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={7} className="h-32 text-center text-sm text-muted-foreground">
                   {payments.length === 0 ? "No payments recorded yet" : "No results found"}
                 </TableCell>
               </TableRow>
@@ -314,6 +338,26 @@ export default function PaymentsPage() {
                   </TableCell>
                   <TableCell className="text-right font-medium tabular-nums text-emerald-600">
                     {formatINR(p.amount)}
+                  </TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    {(() => {
+                      const a = appliedTo(p);
+                      if (!a) return <span className="text-muted-foreground">—</span>;
+                      if (a.kind === "invoice")
+                        return (
+                          <Link href={`/invoices/${a.id}`} className="hover:underline">
+                            {a.label}
+                          </Link>
+                        );
+                      return (
+                        <span>
+                          {a.label}
+                          <span className="ml-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                            project
+                          </span>
+                        </span>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell>{p.payment_method}</TableCell>
                   <TableCell className="text-muted-foreground">{p.reference_number || "—"}</TableCell>
@@ -365,6 +409,14 @@ export default function PaymentsPage() {
               <dt className="text-muted-foreground">Amount</dt>
               <dd className="col-span-2 font-semibold tabular-nums text-emerald-600">
                 {formatINR(viewing.amount)}
+              </dd>
+              <dt className="text-muted-foreground">Applied to</dt>
+              <dd className="col-span-2">
+                {(() => {
+                  const a = appliedTo(viewing);
+                  if (!a) return "—";
+                  return a.kind === "invoice" ? `Invoice ${a.label}` : `Project · ${a.label}`;
+                })()}
               </dd>
               <dt className="text-muted-foreground">Method</dt>
               <dd className="col-span-2">{viewing.payment_method}</dd>

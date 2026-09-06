@@ -142,16 +142,24 @@ create index if not exists clients_status_idx         on public.clients (status)
 
 -- ---- Summary view: client fields + payment-derived totals ----------------
 
-create or replace view public.client_summary
+-- drop + create (not "or replace"): billing_cycle sits mid-table, so replacing
+-- an older view would fail with a column-rename error (42P16).
+drop view if exists public.client_summary;
+create view public.client_summary
 with (security_invoker = true) as
 select
   c.*,
   coalesce(sum(p.amount), 0)::numeric as total_received,
   greatest(
-    c.monthly_value - coalesce(
-      sum(p.amount) filter (
-        where date_trunc('month', p.payment_date) = date_trunc('month', current_date)
-      ), 0),
+    (case c.billing_cycle
+       when 'quarterly'  then c.monthly_value / 3.0
+       when 'commission' then 0
+       else c.monthly_value
+     end)
+    - coalesce(
+        sum(p.amount) filter (
+          where date_trunc('month', p.payment_date) = date_trunc('month', current_date)
+        ), 0),
     0
   )::numeric as outstanding,
   count(p.id) as payment_count
