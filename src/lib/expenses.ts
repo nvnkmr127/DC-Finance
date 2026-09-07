@@ -21,6 +21,7 @@ export type Expense = Omit<ExpenseInput, "receipt_path"> & {
   updated_at?: string;
   receipt_path: string | null;
   created_by?: string | null;
+  created_by_email?: string | null;
 };
 
 // receipt_path is nullable text; an empty selection must become NULL, not "".

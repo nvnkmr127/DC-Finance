@@ -265,19 +265,20 @@ export default function ExpensesPage() {
               <TableHead>Vendor</TableHead>
               <TableHead className="text-right">Amount</TableHead>
               <TableHead>Payment Method</TableHead>
+              {!expenseOnly && <TableHead>Added by</TableHead>}
               <TableHead className="w-10" />
             </TableRow>
           </TableHeader>
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center">
+                <TableCell colSpan={expenseOnly ? 7 : 8} className="h-32 text-center">
                   <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
                 </TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={expenseOnly ? 7 : 8} className="h-32 text-center text-sm text-muted-foreground">
                   {expenses.length === 0 ? "No expenses recorded yet" : "No results found"}
                 </TableCell>
               </TableRow>
@@ -308,6 +309,11 @@ export default function ExpensesPage() {
                     {formatINR(e.amount)}
                   </TableCell>
                   <TableCell className="whitespace-nowrap">{e.payment_method}</TableCell>
+                  {!expenseOnly && (
+                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
+                      {e.created_by_email || "—"}
+                    </TableCell>
+                  )}
                   <TableCell>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
