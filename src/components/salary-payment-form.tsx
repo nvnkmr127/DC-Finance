@@ -31,16 +31,19 @@ import {
   salaryPaymentSchema,
   createSalaryPayment,
   updateSalaryPayment,
+  alreadyPaidForMonth,
   type SalaryPaymentInput,
   type SalaryPayment,
 } from "@/lib/salaries";
 import { formatINR } from "@/lib/format";
 
 const today = () => new Date().toISOString().slice(0, 10);
+const thisMonth = () => new Date().toISOString().slice(0, 7);
 
 const empty: SalaryPaymentInput = {
   employee_id: "",
   amount: 0,
+  salary_month: thisMonth(),
   payment_date: today(),
   bonus: 0,
   deduction: 0,
@@ -50,6 +53,7 @@ const empty: SalaryPaymentInput = {
 
 export function SalaryPaymentForm({
   employees,
+  payments = [],
   payment,
   open,
   onOpenChange,
@@ -57,6 +61,7 @@ export function SalaryPaymentForm({
   showTrigger = false,
 }: {
   employees: { id: string; name: string; salary?: number }[];
+  payments?: { id?: string; employee_id: string; salary_month: string }[];
   payment?: SalaryPayment;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -80,11 +85,12 @@ export function SalaryPaymentForm({
     defaultValues: empty,
   });
 
-  const [amount, bonus, deduction] = useWatch({
+  const [amount, bonus, deduction, employeeId, salaryMonth] = useWatch({
     control,
-    name: ["amount", "bonus", "deduction"],
+    name: ["amount", "bonus", "deduction", "employee_id", "salary_month"],
   });
   const net = (amount || 0) + (bonus || 0) - (deduction || 0);
+  const duplicate = alreadyPaidForMonth(payments, employeeId, salaryMonth, payment?.id);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -93,6 +99,7 @@ export function SalaryPaymentForm({
         ? {
             employee_id: payment.employee_id,
             amount: payment.amount,
+            salary_month: payment.salary_month,
             payment_date: payment.payment_date,
             bonus: payment.bonus,
             deduction: payment.deduction,
@@ -169,11 +176,14 @@ export function SalaryPaymentForm({
             </Field>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Amount" htmlFor="amount" required error={errors.amount?.message}>
-                <MoneyInput id="amount" aria-invalid={!!errors.amount} {...register("amount", { valueAsNumber: true })} placeholder="0" />
+              <Field label="Salary Month" htmlFor="salary_month" required error={errors.salary_month?.message}>
+                <Input id="salary_month" type="month" aria-invalid={!!errors.salary_month} {...register("salary_month")} />
               </Field>
               <Field label="Payment Date" htmlFor="payment_date" required error={errors.payment_date?.message}>
                 <Input id="payment_date" type="date" aria-invalid={!!errors.payment_date} {...register("payment_date")} />
+              </Field>
+              <Field label="Amount" htmlFor="amount" required error={errors.amount?.message}>
+                <MoneyInput id="amount" aria-invalid={!!errors.amount} {...register("amount", { valueAsNumber: true })} placeholder="0" />
               </Field>
               <Field label="Bonus" htmlFor="bonus" error={errors.bonus?.message}>
                 <MoneyInput id="bonus" aria-invalid={!!errors.bonus} {...register("bonus", { valueAsNumber: true })} placeholder="0" />
@@ -187,6 +197,13 @@ export function SalaryPaymentForm({
               <span className="text-muted-foreground">Net salary</span>
               <span className="font-semibold tabular-nums">{formatINR(net)}</span>
             </div>
+
+            {duplicate && (
+              <p className="rounded-md border border-amber-500/50 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-700 dark:text-amber-400">
+                This employee already has a salary payment for {salaryMonth}.
+                Recording another will create a duplicate.
+              </p>
+            )}
 
             <Field label="Notes" htmlFor="notes" error={errors.notes?.message}>
               <Textarea id="notes" {...register("notes")} placeholder="Optional notes" rows={2} />

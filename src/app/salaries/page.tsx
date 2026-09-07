@@ -346,8 +346,8 @@ export default function SalariesPage() {
               )}
             </div>
             <div className="flex gap-2">
-              <BulkSalaryForm showTrigger employees={activeEmployees} onSaved={refetch} />
-              <SalaryPaymentForm showTrigger employees={activeEmployees} onSaved={refetch} />
+              <BulkSalaryForm showTrigger employees={activeEmployees} payments={payments} onSaved={refetch} />
+              <SalaryPaymentForm showTrigger employees={activeEmployees} payments={payments} onSaved={refetch} />
             </div>
           </div>
           <div className="rounded-lg border bg-card">
@@ -429,6 +429,7 @@ export default function SalariesPage() {
       />
       <SalaryPaymentForm
         employees={activeEmployees}
+        payments={payments}
         payment={editPay ?? undefined}
         open={editPay !== null}
         onOpenChange={(o) => !o && setEditPay(null)}

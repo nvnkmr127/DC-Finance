@@ -51,7 +51,8 @@ export async function setEmployeeActive(id: string, active: boolean): Promise<vo
 export const salaryPaymentSchema = z.object({
   employee_id: z.string().min(1, "Select an employee"),
   amount: z.number({ error: "Enter an amount" }).positive("Must be greater than 0"),
-  payment_date: z.string().min(1, "Select a payment date"),
+  salary_month: z.string().min(1, "Select the salary month"), // period the pay is for, "YYYY-MM"
+  payment_date: z.string().min(1, "Select a payment date"),   // when it was actually paid
   bonus: z.number({ error: "Enter a number" }).min(0, "Must be 0 or more"),
   deduction: z.number({ error: "Enter a number" }).min(0, "Must be 0 or more"),
   notes: z.string().max(1000).optional().or(z.literal("")),
@@ -71,12 +72,32 @@ export type SalaryPayment = {
   amount: number;
   bonus: number;
   deduction: number;
+  salary_month: string;
   payment_date: string;
   notes: string | null;
   receipt_path: string | null;
   created_at: string;
   employees: { name: string; designation: string } | null;
 };
+
+// A salary is a duplicate when the same employee already has a payment for the
+// same salary period (salary_month), regardless of when it was paid. Legit
+// double-pays exist (bonus runs, corrections), so callers warn rather than
+// hard-block. Pass excludeId when editing so a row doesn't flag itself.
+export function alreadyPaidForMonth(
+  payments: { id?: string; employee_id: string; salary_month: string }[],
+  employeeId: string,
+  salaryMonth: string,
+  excludeId?: string,
+): boolean {
+  if (!employeeId || !salaryMonth) return false;
+  return payments.some(
+    (p) =>
+      p.id !== excludeId &&
+      p.employee_id === employeeId &&
+      p.salary_month === salaryMonth,
+  );
+}
 
 // Net salary = amount + bonus - deduction.
 export function netSalary(p: {

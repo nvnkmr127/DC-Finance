@@ -76,6 +76,7 @@ create table if not exists public.salary_payments (
   id           uuid primary key default gen_random_uuid(),
   employee_id  uuid not null references public.employees(id) on delete cascade,
   amount       numeric not null default 0,
+  salary_month text not null default to_char(now(), 'YYYY-MM'),
   payment_date date not null default now(),
   bonus        numeric not null default 0,
   deduction    numeric not null default 0,

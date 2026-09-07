@@ -31,6 +31,7 @@ import { createSalaryPaymentsBulk, netSalary, type SalaryPaymentInput } from "@/
 import { useSettings } from "@/components/settings-provider";
 
 const today = () => new Date().toISOString().slice(0, 10);
+const thisMonth = () => new Date().toISOString().slice(0, 7);
 
 type Row = {
   employee_id: string;
@@ -43,10 +44,12 @@ type Row = {
 
 export function BulkSalaryForm({
   employees,
+  payments = [],
   onSaved,
   showTrigger = false,
 }: {
   employees: { id: string; name: string; salary?: number }[];
+  payments?: { employee_id: string; salary_month: string }[];
   onSaved: () => void;
   showTrigger?: boolean;
 }) {
@@ -55,23 +58,38 @@ export function BulkSalaryForm({
   const [confirming, setConfirming] = useState(false);
   const [saving, setSaving] = useState(false);
   const [paymentDate, setPaymentDate] = useState(today());
+  const [salaryMonth, setSalaryMonth] = useState(thisMonth());
   const [rows, setRows] = useState<Row[]>([]);
 
+  // Employees who already have a payment for the selected salary period —
+  // recomputed as the month changes so the "already paid" flag always tracks it.
+  const paidThisMonth = useMemo(() => {
+    const s = new Set<string>();
+    for (const p of payments) if (p.salary_month === salaryMonth) s.add(p.employee_id);
+    return s;
+  }, [payments, salaryMonth]);
+
   // Seed one row per employee, salary pre-filled, when the dialog opens.
+  // Anyone already paid for this period starts unticked to avoid a double-pay.
   useEffect(() => {
     if (!open) return;
+    const month = thisMonth();
+    const paid = new Set(
+      payments.filter((p) => p.salary_month === month).map((p) => p.employee_id),
+    );
     setPaymentDate(today());
+    setSalaryMonth(month);
     setRows(
       employees.map((e) => ({
         employee_id: e.id,
         name: e.name,
-        include: true,
+        include: !paid.has(e.id),
         amount: e.salary ?? 0,
         bonus: 0,
         deduction: 0,
       })),
     );
-  }, [open, employees]);
+  }, [open, employees, payments]);
 
   const setRow = (id: string, patch: Partial<Row>) =>
     setRows((prev) => prev.map((r) => (r.employee_id === id ? { ...r, ...patch } : r)));
@@ -82,6 +100,7 @@ export function BulkSalaryForm({
     [selected],
   );
   const invalid = selected.filter((r) => r.amount <= 0);
+  const dupSelected = selected.filter((r) => paidThisMonth.has(r.employee_id));
   const canReview = selected.length > 0 && invalid.length === 0;
 
   async function confirmPay() {
@@ -92,6 +111,7 @@ export function BulkSalaryForm({
         amount: r.amount,
         bonus: r.bonus,
         deduction: r.deduction,
+        salary_month: salaryMonth,
         payment_date: paymentDate,
         notes: "",
         receipt_path: "",
@@ -128,15 +148,27 @@ export function BulkSalaryForm({
           </DialogHeader>
 
           <div className="grid gap-4 py-2">
-            <div className="flex items-center gap-3">
-              <Label htmlFor="bulk_date" className="text-sm">Payment Date</Label>
-              <Input
-                id="bulk_date"
-                type="date"
-                value={paymentDate}
-                onChange={(e) => setPaymentDate(e.target.value)}
-                className="w-44"
-              />
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="flex items-center gap-3">
+                <Label htmlFor="bulk_month" className="text-sm">Salary Month</Label>
+                <Input
+                  id="bulk_month"
+                  type="month"
+                  value={salaryMonth}
+                  onChange={(e) => setSalaryMonth(e.target.value)}
+                  className="w-44"
+                />
+              </div>
+              <div className="flex items-center gap-3">
+                <Label htmlFor="bulk_date" className="text-sm">Payment Date</Label>
+                <Input
+                  id="bulk_date"
+                  type="date"
+                  value={paymentDate}
+                  onChange={(e) => setPaymentDate(e.target.value)}
+                  className="w-44"
+                />
+              </div>
             </div>
 
             {rows.length === 0 ? (
@@ -164,7 +196,14 @@ export function BulkSalaryForm({
                             aria-label={`Include ${r.name}`}
                           />
                         </td>
-                        <td className="p-2 font-medium">{r.name}</td>
+                        <td className="p-2 font-medium">
+                          {r.name}
+                          {paidThisMonth.has(r.employee_id) && (
+                            <span className="ml-2 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-400">
+                              Already paid
+                            </span>
+                          )}
+                        </td>
                         {(["amount", "bonus", "deduction"] as const).map((f) => (
                           <td key={f} className="p-1">
                             <Input
@@ -202,6 +241,11 @@ export function BulkSalaryForm({
                 {invalid.length} selected {invalid.length === 1 ? "row has" : "rows have"} an amount of 0 — set an amount or untick.
               </p>
             )}
+            {dupSelected.length > 0 && (
+              <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                {dupSelected.length} selected {dupSelected.length === 1 ? "employee is" : "employees are"} already paid for {salaryMonth} — untick to skip, or continue to pay again.
+              </p>
+            )}
           </div>
 
           <DialogFooter>
@@ -221,7 +265,7 @@ export function BulkSalaryForm({
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm {selected.length} salary payment{selected.length === 1 ? "" : "s"}</AlertDialogTitle>
             <AlertDialogDescription>
-              Dated {paymentDate}. This records the following and can’t be undone in bulk.
+              Salary for {salaryMonth}, paid {paymentDate}. This records the following and can’t be undone in bulk.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="max-h-64 overflow-y-auto rounded-md border text-sm">

@@ -8,6 +8,7 @@ import {
   Wallet,
   Clock,
   RefreshCw,
+  Landmark,
   Loader2,
   AlertCircle,
 } from "lucide-react";
@@ -21,6 +22,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { StatCard } from "@/components/stat-card";
 import { PageHeader } from "@/components/page-header";
+import { AiPanel } from "@/components/ai-panel";
 import {
   RevenueExpenseLineChart,
   ProfitBarChart,
@@ -32,12 +34,21 @@ import { listExpenses, type Expense } from "@/lib/expenses";
 import { listSalaryPayments, netSalary, type SalaryPayment, listEmployees, type Employee } from "@/lib/salaries";
 import { listClients, monthlyEquivalent, type ClientSummary } from "@/lib/clients";
 import { listRecurring, daysUntil, type Recurring } from "@/lib/recurring";
+import { getOpeningBalance } from "@/lib/statements";
+import { listBudgets, type Budget } from "@/lib/budgets";
 import { formatDate, financialYear } from "@/lib/format";
 import { useSettings } from "@/components/settings-provider";
 import { cn } from "@/lib/utils";
 
 const currentMonth = () => new Date().toISOString().slice(0, 7);
 const ym = (date: string) => date.slice(0, 7);
+
+// Signed % change vs the previous period; undefined when there's no prior base
+// to compare against (avoids divide-by-zero and a meaningless "+∞%").
+function pctDelta(cur: number, prev: number): number | undefined {
+  if (!prev) return undefined;
+  return Math.round(((cur - prev) / Math.abs(prev)) * 100);
+}
 
 // Trailing `count` months ending at `end` (YYYY-MM) → [{ key, label }].
 function monthsRange(end: string, count: number) {
@@ -83,6 +94,8 @@ export default function DashboardPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [clients, setClients] = useState<ClientSummary[]>([]);
   const [recurring, setRecurring] = useState<Recurring[]>([]);
+  const [openingBalance, setOpeningBalance] = useState<number | null>(null);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -114,6 +127,18 @@ export default function DashboardPage() {
     })();
   }, []);
 
+  // Opening balance and budgets are per-month, so refetch when the month changes.
+  useEffect(() => {
+    (async () => {
+      const [ob, b] = await Promise.all([
+        getOpeningBalance(month).catch(() => null),
+        listBudgets(month).catch(() => []),
+      ]);
+      setOpeningBalance(ob);
+      setBudgets(b);
+    })();
+  }, [month]);
+
   const d = useMemo(() => {
     // Per-month aggregates from actual records. Missing months resolve to 0
     // because the reducers run over an (often empty) filtered slice.
@@ -134,6 +159,19 @@ export default function DashboardPage() {
     });
 
     const selected = months[months.length - 1];
+    const prev = months[months.length - 2];
+
+    // Month-over-month change for the headline stats.
+    const deltas = {
+      revenue: pctDelta(selected.revenue, prev?.revenue ?? 0),
+      expenses: pctDelta(selected.expenses, prev?.expenses ?? 0),
+      salaries: pctDelta(selected.salaries, prev?.salaries ?? 0),
+      profit: pctDelta(selected.profit, prev?.profit ?? 0),
+    };
+
+    // Cash on hand = this month's opening balance + net cash flow for the month.
+    // Matches the statements page's closing-balance definition.
+    const cashBalance = (openingBalance ?? 0) + selected.revenue - selected.totalExpenses;
 
     // Outstanding = each client's monthly billing − payments received this month.
     const receivedByClient = new Map<string, number>();
@@ -192,7 +230,7 @@ export default function DashboardPage() {
     // Pending salaries
     const paidByEmployee = new Map<string, number>();
     for (const p of salaries) {
-      if (ym(p.payment_date) === month) {
+      if (p.salary_month === month) {
         paidByEmployee.set(p.employee_id, (paidByEmployee.get(p.employee_id) ?? 0) + netSalary(p));
       }
     }
@@ -201,13 +239,23 @@ export default function DashboardPage() {
       return { id: e.id, name: e.name, remaining };
     }).filter(e => e.remaining > 0).sort((a, b) => b.remaining - a.remaining);
 
+    // Budget vs actual for the month — only categories with a budget set.
+    const actualByCat = new Map(categories.map((c) => [c.name, c.value]));
+    const budgetRows = budgets
+      .filter((b) => b.amount > 0)
+      .map((b) => ({ category: b.category, budget: b.amount, actual: actualByCat.get(b.category) ?? 0 }))
+      .sort((a, b) => b.actual - a.actual);
+
     return {
       selected,
+      deltas,
+      cashBalance,
       outstanding,
       totalRecurring,
       fytd,
       months,
       categories,
+      budgetRows,
       topClients,
       clientsWithOutstanding,
       upcoming,
@@ -215,7 +263,7 @@ export default function DashboardPage() {
       recentPayments: payments.slice(0, 5),
       recentExpenses: expenses.slice(0, 5),
     };
-  }, [payments, expenses, salaries, employees, clients, recurring, month, fyStart]);
+  }, [payments, expenses, salaries, employees, clients, recurring, budgets, openingBalance, month, fyStart]);
 
   const monthLabel = new Date(`${month}-01`).toLocaleString("en-IN", {
     month: "long",
@@ -257,10 +305,11 @@ export default function DashboardPage() {
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            <StatCard title="Revenue" value={d.selected.revenue} icon={TrendingUp} accent="positive" hint="Payments received" />
-            <StatCard title="Expenses" value={d.selected.expenses} icon={TrendingDown} accent="negative" hint="Business expenses" />
-            <StatCard title="Salaries" value={d.selected.salaries} icon={Users} accent="negative" hint="Net salary paid" />
-            <StatCard title="Net Profit" value={d.selected.profit} icon={Wallet} accent={d.selected.profit >= 0 ? "positive" : "negative"} hint="Revenue − expenses − salaries" />
+            <StatCard title="Revenue" value={d.selected.revenue} icon={TrendingUp} accent="positive" hint="Payments received" delta={d.deltas.revenue} />
+            <StatCard title="Expenses" value={d.selected.expenses} icon={TrendingDown} accent="negative" hint="Business expenses" delta={d.deltas.expenses} invertDelta />
+            <StatCard title="Salaries" value={d.selected.salaries} icon={Users} accent="negative" hint="Net salary paid" delta={d.deltas.salaries} invertDelta />
+            <StatCard title="Net Profit" value={d.selected.profit} icon={Wallet} accent={d.selected.profit >= 0 ? "positive" : "negative"} hint="Revenue − expenses − salaries" delta={d.deltas.profit} />
+            <StatCard title="Cash Balance" value={d.cashBalance} icon={Landmark} accent={d.cashBalance >= 0 ? "positive" : "negative"} hint="Opening + net cash flow" />
             <StatCard title="Outstanding" value={d.outstanding} icon={Clock} accent="warning" hint="Billing − received" />
             <StatCard title="Recurring Expenses" value={d.totalRecurring} icon={RefreshCw} accent="default" hint="Monthly active recurring" />
           </div>
@@ -287,6 +336,28 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
+
+          <AiPanel
+            currency={settings?.default_currency || "INR"}
+            context={{
+              month: monthLabel,
+              revenue: d.selected.revenue,
+              expenses: d.selected.expenses,
+              salaries: d.selected.salaries,
+              netProfit: d.selected.profit,
+              cashBalance: d.cashBalance,
+              outstanding: d.outstanding,
+              recurringMonthly: d.totalRecurring,
+              momChangePct: d.deltas,
+              financialYearToDate: d.fytd,
+              topClientsThisMonth: d.topClients,
+              clientsWithOutstanding: d.clientsWithOutstanding,
+              pendingSalaries: d.pendingSalaries,
+              budgetVsActual: d.budgetRows,
+              expensesByCategory: d.categories,
+              monthlyTrend: d.months.map((m) => ({ month: m.month, revenue: m.revenue, expenses: m.totalExpenses, profit: m.profit })),
+            }}
+          />
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <Card className="lg:col-span-2">
@@ -344,6 +415,38 @@ export default function DashboardPage() {
               )}
             </Panel>
           </div>
+
+          <Panel title="Budget vs Actual" description={monthLabel} className="lg:col-span-2">
+            {d.budgetRows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">
+                No budgets set for {monthLabel}. Add category budgets in the Budgets page.
+              </p>
+            ) : (
+              <ul className="space-y-3">
+                {d.budgetRows.map((b) => {
+                  const pct = b.budget > 0 ? Math.min((b.actual / b.budget) * 100, 100) : 0;
+                  const over = b.actual > b.budget;
+                  return (
+                    <li key={b.category}>
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="truncate font-medium">{b.category}</span>
+                        <span className={cn("tabular-nums", over ? "text-red-600" : "text-muted-foreground")}>
+                          {formatCurrency(b.actual)} / {formatCurrency(b.budget)}
+                          {over && ` · over by ${formatCurrency(b.actual - b.budget)}`}
+                        </span>
+                      </div>
+                      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-muted">
+                        <div
+                          className={cn("h-full rounded-full", over ? "bg-red-500" : "bg-emerald-500")}
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </Panel>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <Panel title="Recent Payments">
