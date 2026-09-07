@@ -8,6 +8,7 @@ export type Settings = {
   financial_year_start: string;
   expense_categories: string[];
   payment_methods: string[];
+  expense_only_emails: string[];
   email_reminders_enabled: boolean;
   reminder_from_email: string | null;
   updated_at: string;
@@ -29,6 +30,7 @@ export async function getSettings(): Promise<Settings> {
       financial_year_start: "04-01",
       expense_categories: ["Office", "Software", "Advertising", "Equipment", "Travel", "Internet", "Electricity", "Freelancers", "Salary", "Other"],
       payment_methods: ["Bank Transfer", "UPI", "Cash", "Card", "Other"],
+      expense_only_emails: [],
       email_reminders_enabled: false,
       reminder_from_email: null,
       updated_at: new Date().toISOString()

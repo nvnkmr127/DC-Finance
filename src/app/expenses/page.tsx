@@ -41,6 +41,8 @@ import {
 import { PageHeader } from "@/components/page-header";
 import { MetricCard } from "@/components/metric-card";
 import { ExpenseForm } from "@/components/expense-form";
+import { useExpenseOnly } from "@/components/role";
+import { useAuth } from "@/components/auth-provider";
 import {
   listExpenses,
   deleteExpense,
@@ -64,14 +66,18 @@ export default function ExpensesPage() {
   const [deleting, setDeleting] = useState<Expense | null>(null);
 
   const { settings } = useSettings();
+  const { session } = useAuth();
+  const expenseOnly = useExpenseOnly();
   const expenseCategories = settings?.expense_categories || [];
   const paymentMethods = settings?.payment_methods || [];
+
+  // Expense-only users see just the rows they entered; admins see everything.
+  const ownerId = expenseOnly ? session?.user?.id : undefined;
 
   async function refetch() {
     setError(null);
     try {
-      const data = await listExpenses();
-      setExpenses(data);
+      setExpenses(await listExpenses(ownerId));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load expenses");
     } finally {
@@ -79,25 +85,17 @@ export default function ExpensesPage() {
     }
   }
 
+  // Wait for settings (which decide the role) before loading, so a restricted
+  // user never briefly sees everyone's expenses. Reloads if the role resolves.
   useEffect(() => {
+    if (!settings) return;
     let ignore = false;
-    listExpenses()
-      .then((data) => {
-        if (!ignore) {
-          setExpenses(data);
-          setLoading(false);
-        }
-      })
-      .catch((e) => {
-        if (!ignore) {
-          setError(e instanceof Error ? e.message : "Failed to load expenses");
-          setLoading(false);
-        }
-      });
-    return () => {
-      ignore = true;
-    };
-  }, []);
+    listExpenses(ownerId)
+      .then((data) => { if (!ignore) { setExpenses(data); setLoading(false); } })
+      .catch((e) => { if (!ignore) { setError(e instanceof Error ? e.message : "Failed to load expenses"); setLoading(false); } });
+    return () => { ignore = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings, ownerId]);
 
   const summary = useMemo(() => {
     const now = new Date();

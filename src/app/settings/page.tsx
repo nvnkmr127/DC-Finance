@@ -31,6 +31,9 @@ export default function SettingsPage() {
   const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
   const [newMethod, setNewMethod] = useState("");
 
+  const [expenseOnlyEmails, setExpenseOnlyEmails] = useState<string[]>([]);
+  const [newExpenseEmail, setNewExpenseEmail] = useState("");
+
   const [services, setServices] = useState<Service[]>([]);
   const [newServiceName, setNewServiceName] = useState("");
   const [newServicePrice, setNewServicePrice] = useState("");
@@ -73,6 +76,7 @@ export default function SettingsPage() {
       setFyStart(settings.financial_year_start);
       setCategories([...settings.expense_categories]);
       setPaymentMethods([...settings.payment_methods]);
+      setExpenseOnlyEmails([...(settings.expense_only_emails ?? [])]);
       setEmailRemindersEnabled(settings.email_reminders_enabled);
       setReminderFromEmail(settings.reminder_from_email ?? "");
     }
@@ -97,6 +101,16 @@ export default function SettingsPage() {
   const removeCategory = (cat: string) => {
     setCategories(categories.filter((c) => c !== cat));
   };
+
+  const addExpenseEmail = () => {
+    const val = newExpenseEmail.trim().toLowerCase();
+    if (val && val.includes("@") && !expenseOnlyEmails.includes(val)) {
+      setExpenseOnlyEmails([...expenseOnlyEmails, val]);
+      setNewExpenseEmail("");
+    }
+  };
+  const removeExpenseEmail = (email: string) =>
+    setExpenseOnlyEmails(expenseOnlyEmails.filter((e) => e !== email));
 
   const addMethod = () => {
     const val = newMethod.trim();
@@ -182,6 +196,7 @@ export default function SettingsPage() {
         financial_year_start: fyStart.trim() || "04-01",
         expense_categories: categories,
         payment_methods: paymentMethods,
+        expense_only_emails: expenseOnlyEmails,
         email_reminders_enabled: emailRemindersEnabled,
         reminder_from_email: reminderFromEmail.trim() || null,
       });
@@ -326,6 +341,53 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
+          </CardContent>
+        </Card>
+
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle>Expense-Only Logins</CardTitle>
+            <CardDescription>
+              Users signed in with these emails can only reach the Expenses page — no dashboard, clients, salaries, reports or AI.
+              They still need to sign up / sign in normally first.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex gap-2">
+              <Input
+                type="email"
+                value={newExpenseEmail}
+                onChange={(e) => setNewExpenseEmail(e.target.value)}
+                placeholder="person@company.in"
+                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addExpenseEmail())}
+              />
+              <Button type="button" variant="secondary" onClick={addExpenseEmail}>
+                <Plus className="h-4 w-4" />
+              </Button>
+            </div>
+            {expenseOnlyEmails.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No restricted logins. Everyone signed in has full access.</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {expenseOnlyEmails.map((email) => (
+                  <div key={email} className="flex items-center gap-1 rounded-md bg-muted px-3 py-1 text-sm font-medium">
+                    {email}
+                    <button
+                      type="button"
+                      aria-label={`Remove ${email}`}
+                      onClick={() => removeExpenseEmail(email)}
+                      className="ml-1 text-muted-foreground hover:text-foreground"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="rounded-md border border-amber-500/40 bg-amber-500/5 px-3 py-2 text-xs text-muted-foreground">
+              This restricts the interface only. For a hard boundary (so these users can&apos;t reach other data via the API),
+              per-role database rules (RLS) are also needed — ask to have those added. Don&apos;t add your own admin email here.
+            </p>
           </CardContent>
         </Card>
 

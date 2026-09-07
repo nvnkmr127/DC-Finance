@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/components/auth-provider";
+import { useExpenseOnly } from "@/components/role";
 
 type NavItem = { href: string; label: string; icon: LucideIcon };
 
@@ -71,9 +72,14 @@ const groups: { title: string; items: NavItem[] }[] = [
 
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
+  const expenseOnly = useExpenseOnly();
+  // Expense-only users see just the Expenses entry.
+  const visible = expenseOnly
+    ? [{ title: "Menu", items: [{ href: "/expenses", label: "Expenses", icon: Receipt }] }]
+    : groups;
   return (
     <nav className="flex flex-col gap-4 px-3 pb-4">
-      {groups.map((group) => (
+      {visible.map((group) => (
         <div key={group.title} className="flex flex-col gap-0.5">
           <p className="px-3 pb-1 pt-1 text-[10px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
             {group.title}

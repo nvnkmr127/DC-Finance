@@ -20,6 +20,7 @@ export type Expense = Omit<ExpenseInput, "receipt_path"> & {
   created_at: string;
   updated_at?: string;
   receipt_path: string | null;
+  created_by?: string | null;
 };
 
 // receipt_path is nullable text; an empty selection must become NULL, not "".
@@ -27,11 +28,12 @@ function normalize(input: ExpenseInput) {
   return { ...input, receipt_path: input.receipt_path || null };
 }
 
-export async function listExpenses(): Promise<Expense[]> {
-  const { data, error } = await getSupabase()
-    .from("expenses")
-    .select("*")
-    .order("expense_date", { ascending: false });
+// ownerId restricts the list to expenses that user entered (for expense-only
+// data-entry logins). Omit it for the full list (admin views).
+export async function listExpenses(ownerId?: string): Promise<Expense[]> {
+  let q = getSupabase().from("expenses").select("*").order("expense_date", { ascending: false });
+  if (ownerId) q = q.eq("created_by", ownerId);
+  const { data, error } = await q;
   if (error) throw new Error(error.message);
   return data as Expense[];
 }

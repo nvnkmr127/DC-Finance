@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
+import { useExpenseOnly } from "@/components/role";
 
 type Dest = { href: string; label: string; group: string; icon: LucideIcon };
 
@@ -31,6 +32,7 @@ const DESTINATIONS: Dest[] = [
 
 export function CommandPalette() {
   const router = useRouter();
+  const expenseOnly = useExpenseOnly();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -61,6 +63,8 @@ export function CommandPalette() {
     setOpen(false);
     router.push(d.href);
   }
+
+  if (expenseOnly) return null; // no cross-page navigation for data-entry role
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>

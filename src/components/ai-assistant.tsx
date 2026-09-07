@@ -14,6 +14,7 @@ import { listClients, monthlyEquivalent } from "@/lib/clients";
 import { listEmployees } from "@/lib/salaries";
 import { listRecurring } from "@/lib/recurring";
 import { financialYear } from "@/lib/format";
+import { useExpenseOnly } from "@/components/role";
 
 type Msg = { role: "user" | "assistant"; content: string };
 
@@ -85,6 +86,7 @@ async function buildSnapshot(fyStart: string) {
 
 export function AiAssistant() {
   const { settings } = useSettings();
+  const expenseOnly = useExpenseOnly();
   const currency = settings?.default_currency || "INR";
   const fyStart = settings?.financial_year_start || "04-01";
 
@@ -144,6 +146,8 @@ export function AiAssistant() {
       setBusy(false);
     }
   }
+
+  if (expenseOnly) return null; // data-entry role has no AI access
 
   return (
     <>
