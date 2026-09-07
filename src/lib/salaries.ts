@@ -141,3 +141,20 @@ export async function deleteSalaryPayment(id: string): Promise<void> {
   const { error } = await getSupabase().from("salary_payments").delete().eq("id", id);
   if (error) throw new Error(error.message);
 }
+
+// Bulk actions on selected rows. Apply the same field(s) to many payments, or
+// delete many, in a single query each.
+export async function updateSalaryPaymentsBulk(
+  ids: string[],
+  patch: Partial<Pick<SalaryPaymentInput, "salary_month" | "payment_date">>,
+): Promise<void> {
+  if (!ids.length || Object.keys(patch).length === 0) return;
+  const { error } = await getSupabase().from("salary_payments").update(patch).in("id", ids);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteSalaryPaymentsBulk(ids: string[]): Promise<void> {
+  if (!ids.length) return;
+  const { error } = await getSupabase().from("salary_payments").delete().in("id", ids);
+  if (error) throw new Error(error.message);
+}

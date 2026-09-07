@@ -7,7 +7,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { Search } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Search, Pencil as PencilIcon, Trash2 as Trash2Icon, X } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Table,
@@ -45,12 +55,18 @@ import {
   deleteEmployee,
   setEmployeeActive,
   deleteSalaryPayment,
+  deleteSalaryPaymentsBulk,
+  updateSalaryPaymentsBulk,
   netSalary,
   type Employee,
   type SalaryPayment,
 } from "@/lib/salaries";
 import { formatINR, formatDate } from "@/lib/format";
 import { cn } from "@/lib/utils";
+
+// "2025-07" → "Jul 2025"
+const formatSalaryMonth = (m: string) =>
+  m ? new Date(`${m}-01`).toLocaleString("en-IN", { month: "short", year: "numeric" }) : "—";
 
 export default function SalariesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -63,6 +79,22 @@ export default function SalariesPage() {
   const [editPay, setEditPay] = useState<SalaryPayment | null>(null);
   const [delPay, setDelPay] = useState<SalaryPayment | null>(null);
 
+  // Bulk selection on the Salary Payments table.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkEditOpen, setBulkEditOpen] = useState(false);
+  const [bulkDelOpen, setBulkDelOpen] = useState(false);
+  const [bulkMonth, setBulkMonth] = useState("");
+  const [bulkDate, setBulkDate] = useState("");
+  const [bulkSaving, setBulkSaving] = useState(false);
+
+  const toggleRow = (id: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  const clearSelection = () => setSelected(new Set());
+
   async function refetch() {
     setLoading(true);
     setError(null);
@@ -70,6 +102,7 @@ export default function SalariesPage() {
       const [e, p] = await Promise.all([listEmployees(), listSalaryPayments()]);
       setEmployees(e);
       setPayments(p);
+      setSelected(new Set());
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load salaries");
     } finally {
@@ -106,7 +139,7 @@ export default function SalariesPage() {
     const q = paySearch.trim().toLowerCase();
     return payments.filter((p) => {
       const matchesSearch = !q || p.employees?.name.toLowerCase().includes(q) || (p.notes && p.notes.toLowerCase().includes(q));
-      const matchesMonth = !payMonth || p.payment_date.startsWith(payMonth);
+      const matchesMonth = !payMonth || p.salary_month === payMonth; // filter by salary period, not pay date
       return matchesSearch && matchesMonth;
     });
   }, [payments, paySearch, payMonth]);
@@ -115,6 +148,50 @@ export default function SalariesPage() {
   function resetPayFilters() {
     setPaySearch("");
     setPayMonth("");
+  }
+
+  const allFilteredSelected =
+    filteredPayments.length > 0 && filteredPayments.every((p) => selected.has(p.id));
+  const toggleAll = () =>
+    setSelected((prev) =>
+      filteredPayments.length && filteredPayments.every((p) => prev.has(p.id))
+        ? new Set()
+        : new Set(filteredPayments.map((p) => p.id)),
+    );
+
+  async function applyBulkEdit() {
+    const patch: { salary_month?: string; payment_date?: string } = {};
+    if (bulkMonth) patch.salary_month = bulkMonth;
+    if (bulkDate) patch.payment_date = bulkDate;
+    if (Object.keys(patch).length === 0) {
+      toast.error("Set a salary month or payment date to apply");
+      return;
+    }
+    setBulkSaving(true);
+    try {
+      await updateSalaryPaymentsBulk([...selected], patch);
+      toast.success(`Updated ${selected.size} payment${selected.size > 1 ? "s" : ""}`);
+      setBulkEditOpen(false);
+      refetch();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to update");
+    } finally {
+      setBulkSaving(false);
+    }
+  }
+
+  async function applyBulkDelete() {
+    setBulkSaving(true);
+    try {
+      await deleteSalaryPaymentsBulk([...selected]);
+      toast.success(`Deleted ${selected.size} payment${selected.size > 1 ? "s" : ""}`);
+      setBulkDelOpen(false);
+      refetch();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to delete");
+    } finally {
+      setBulkSaving(false);
+    }
   }
 
   const activeEmployees = useMemo(
@@ -132,10 +209,11 @@ export default function SalariesPage() {
       .filter((p) => p.payment_date.startsWith(yearPrefix))
       .reduce((s, p) => s + netSalary(p), 0);
 
-    // Pending = active employees' monthly salary not yet paid (net) this month.
+    // Pending = active employees whose salary FOR this month hasn't been recorded
+    // yet, keyed on salary_month (period), independent of when it's paid.
     const paidByEmployee = new Map<string, number>();
     for (const p of payments) {
-      if (p.payment_date.startsWith(monthPrefix)) {
+      if (p.salary_month === monthPrefix) {
         paidByEmployee.set(p.employee_id, (paidByEmployee.get(p.employee_id) ?? 0) + netSalary(p));
       }
     }
@@ -350,12 +428,36 @@ export default function SalariesPage() {
               <SalaryPaymentForm showTrigger employees={activeEmployees} payments={payments} onSaved={refetch} />
             </div>
           </div>
+          {selected.size > 0 && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-accent/40 px-3 py-2 text-sm">
+              <span className="font-medium">{selected.size} selected</span>
+              <div className="ml-auto flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => { setBulkMonth(""); setBulkDate(""); setBulkEditOpen(true); }}>
+                  <PencilIcon className="h-4 w-4" /> Edit
+                </Button>
+                <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" onClick={() => setBulkDelOpen(true)}>
+                  <Trash2Icon className="h-4 w-4" /> Delete
+                </Button>
+                <Button size="sm" variant="ghost" onClick={clearSelection}>
+                  <X className="h-4 w-4" /> Clear
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="rounded-lg border bg-card">
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={allFilteredSelected}
+                      onCheckedChange={toggleAll}
+                      aria-label="Select all"
+                    />
+                  </TableHead>
                   <TableHead>Employee</TableHead>
-                  <TableHead>Date</TableHead>
+                  <TableHead>Salary Month</TableHead>
+                  <TableHead>Paid On</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead className="text-right">Bonus</TableHead>
                   <TableHead className="text-right">Deduction</TableHead>
@@ -366,20 +468,28 @@ export default function SalariesPage() {
               <TableBody>
                 {loading ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-32 text-center">
+                    <TableCell colSpan={9} className="h-32 text-center">
                       <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
                     </TableCell>
                   </TableRow>
                 ) : filteredPayments.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={7} className="h-32 text-center text-sm text-muted-foreground">
+                    <TableCell colSpan={9} className="h-32 text-center text-sm text-muted-foreground">
                       No salary payments found
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredPayments.map((p) => (
-                    <TableRow key={p.id}>
+                    <TableRow key={p.id} data-state={selected.has(p.id) ? "selected" : undefined}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selected.has(p.id)}
+                          onCheckedChange={() => toggleRow(p.id)}
+                          aria-label={`Select ${p.employees?.name ?? "payment"}`}
+                        />
+                      </TableCell>
                       <TableCell className="font-medium">{p.employees?.name ?? "Unknown"}</TableCell>
+                      <TableCell className="font-medium">{formatSalaryMonth(p.salary_month)}</TableCell>
                       <TableCell className="text-muted-foreground">{formatDate(p.payment_date)}</TableCell>
                       <TableCell className="text-right tabular-nums">{formatINR(p.amount)}</TableCell>
                       <TableCell className="text-right tabular-nums text-emerald-600">
@@ -467,6 +577,50 @@ export default function SalariesPage() {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={confirmDeletePay} className="bg-destructive text-white hover:bg-destructive/90">
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Bulk edit — apply salary month and/or payment date to selected rows */}
+      <Dialog open={bulkEditOpen} onOpenChange={setBulkEditOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit {selected.size} salary payment{selected.size === 1 ? "" : "s"}</DialogTitle>
+            <DialogDescription>
+              Only filled fields are applied to all selected rows. Leave a field blank to keep it unchanged.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-2">
+            <div className="grid gap-1.5">
+              <Label htmlFor="bulk_salary_month">Salary Month</Label>
+              <Input id="bulk_salary_month" type="month" value={bulkMonth} onChange={(e) => setBulkMonth(e.target.value)} />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="bulk_pay_date">Payment Date</Label>
+              <Input id="bulk_pay_date" type="date" value={bulkDate} onChange={(e) => setBulkDate(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkEditOpen(false)} disabled={bulkSaving}>Cancel</Button>
+            <Button onClick={applyBulkEdit} disabled={bulkSaving}>
+              {bulkSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Apply to {selected.size}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={bulkDelOpen} onOpenChange={(o) => !o && setBulkDelOpen(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selected.size} salary payment{selected.size === 1 ? "" : "s"}?</AlertDialogTitle>
+            <AlertDialogDescription>This removes all selected records and can’t be undone.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={bulkSaving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={applyBulkDelete} disabled={bulkSaving} className="bg-destructive text-white hover:bg-destructive/90">
+              Delete {selected.size}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

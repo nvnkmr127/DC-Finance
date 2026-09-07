@@ -147,8 +147,10 @@ export default function DashboardPage() {
       payments.filter((p) => ym(p.payment_date) === key).reduce((s, p) => s + p.amount, 0);
     const expensesIn = (key: string) =>
       expenses.filter((e) => ym(e.expense_date) === key).reduce((s, e) => s + e.amount, 0);
+    // Salaries are attributed to the period they're FOR (salary_month), so
+    // July's salary paid on Aug 1 shows under July, not August.
     const salariesIn = (key: string) =>
-      salaries.filter((p) => ym(p.payment_date) === key).reduce((s, p) => s + netSalary(p), 0);
+      salaries.filter((p) => p.salary_month === key).reduce((s, p) => s + netSalary(p), 0);
 
     // Last 12 months ending at the selected month.
     const months = monthsRange(month, 12).map(({ key, label }) => {
@@ -170,9 +172,13 @@ export default function DashboardPage() {
       profit: pctDelta(selected.profit, prev?.profit ?? 0),
     };
 
-    // Cash on hand = this month's opening balance + net cash flow for the month.
-    // Matches the statements page's closing-balance definition.
-    const cashBalance = (openingBalance ?? 0) + selected.revenue - selected.totalExpenses;
+    // Cash on hand = opening balance + actual cash movement this month. Unlike
+    // the accrual "Salaries" stat above, cash uses when salary was actually PAID
+    // (payment_date), so an Aug-1 payment of July salary leaves cash in August.
+    const cashSalaries = salaries
+      .filter((p) => ym(p.payment_date) === month)
+      .reduce((s, p) => s + netSalary(p), 0);
+    const cashBalance = (openingBalance ?? 0) + selected.revenue - selected.expenses - cashSalaries;
 
     // Outstanding = each client's monthly billing − payments received this month.
     const receivedByClient = new Map<string, number>();
@@ -216,9 +222,10 @@ export default function DashboardPage() {
     // Financial-year-to-date totals.
     const fy = financialYear(fyStart);
     const inFy = (dateStr: string) => dateStr >= fy.start && dateStr < fy.end;
+    const inFyMonth = (m: string) => `${m}-01` >= fy.start && `${m}-01` < fy.end; // salary_month is YYYY-MM
     const fyRevenue = payments.filter((p) => inFy(p.payment_date)).reduce((s, p) => s + p.amount, 0);
     const fyExpenses = expenses.filter((e) => inFy(e.expense_date)).reduce((s, e) => s + e.amount, 0);
-    const fySalaries = salaries.filter((p) => inFy(p.payment_date)).reduce((s, p) => s + netSalary(p), 0);
+    const fySalaries = salaries.filter((p) => inFyMonth(p.salary_month)).reduce((s, p) => s + netSalary(p), 0);
     const fytd = {
       label: fy.label,
       revenue: fyRevenue,
