@@ -23,7 +23,6 @@ import { Input } from "@/components/ui/input";
 import { StatCard } from "@/components/stat-card";
 import { PageHeader } from "@/components/page-header";
 import { AiPanel } from "@/components/ai-panel";
-import { AiChatWidget } from "@/components/ai-chat-widget";
 import {
   RevenueExpenseLineChart,
   ProfitBarChart,
@@ -143,8 +142,10 @@ export default function DashboardPage() {
   const d = useMemo(() => {
     // Per-month aggregates from actual records. Missing months resolve to 0
     // because the reducers run over an (often empty) filtered slice.
+    // Revenue is attributed to the period it's FOR (billing_month), so a July
+    // payment received in mid-August shows under July, not August.
     const revenueIn = (key: string) =>
-      payments.filter((p) => ym(p.payment_date) === key).reduce((s, p) => s + p.amount, 0);
+      payments.filter((p) => p.billing_month === key).reduce((s, p) => s + p.amount, 0);
     const expensesIn = (key: string) =>
       expenses.filter((e) => ym(e.expense_date) === key).reduce((s, e) => s + e.amount, 0);
     // Salaries are attributed to the period they're FOR (salary_month), so
@@ -175,15 +176,18 @@ export default function DashboardPage() {
     // Cash on hand = opening balance + actual cash movement this month. Unlike
     // the accrual "Salaries" stat above, cash uses when salary was actually PAID
     // (payment_date), so an Aug-1 payment of July salary leaves cash in August.
+    const cashRevenue = payments
+      .filter((p) => ym(p.payment_date) === month)
+      .reduce((s, p) => s + p.amount, 0);
     const cashSalaries = salaries
       .filter((p) => ym(p.payment_date) === month)
       .reduce((s, p) => s + netSalary(p), 0);
-    const cashBalance = (openingBalance ?? 0) + selected.revenue - selected.expenses - cashSalaries;
+    const cashBalance = (openingBalance ?? 0) + cashRevenue - selected.expenses - cashSalaries;
 
     // Outstanding = each client's monthly billing − payments received this month.
     const receivedByClient = new Map<string, number>();
     for (const p of payments) {
-      if (ym(p.payment_date) === month) {
+      if (p.billing_month === month) {
         receivedByClient.set(p.client_id, (receivedByClient.get(p.client_id) ?? 0) + p.amount);
       }
     }
@@ -211,7 +215,7 @@ export default function DashboardPage() {
     // Top clients by revenue for the selected month.
     const clientMap = new Map<string, number>();
     for (const p of payments) {
-      if (ym(p.payment_date) !== month) continue;
+      if (p.billing_month !== month) continue;
       clientMap.set(p.clients?.name ?? "Unknown", (clientMap.get(p.clients?.name ?? "Unknown") ?? 0) + p.amount);
     }
     const topClients = [...clientMap.entries()]
@@ -222,8 +226,8 @@ export default function DashboardPage() {
     // Financial-year-to-date totals.
     const fy = financialYear(fyStart);
     const inFy = (dateStr: string) => dateStr >= fy.start && dateStr < fy.end;
-    const inFyMonth = (m: string) => `${m}-01` >= fy.start && `${m}-01` < fy.end; // salary_month is YYYY-MM
-    const fyRevenue = payments.filter((p) => inFy(p.payment_date)).reduce((s, p) => s + p.amount, 0);
+    const inFyMonth = (m: string) => `${m}-01` >= fy.start && `${m}-01` < fy.end; // YYYY-MM period
+    const fyRevenue = payments.filter((p) => inFyMonth(p.billing_month)).reduce((s, p) => s + p.amount, 0);
     const fyExpenses = expenses.filter((e) => inFy(e.expense_date)).reduce((s, e) => s + e.amount, 0);
     const fySalaries = salaries.filter((p) => inFyMonth(p.salary_month)).reduce((s, p) => s + netSalary(p), 0);
     const fytd = {
@@ -505,8 +509,6 @@ export default function DashboardPage() {
           </div>
         </>
       )}
-
-      {!loading && <AiChatWidget context={aiContext} currency={currency} />}
     </div>
   );
 }

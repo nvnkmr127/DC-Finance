@@ -67,6 +67,10 @@ import { listProjects } from "@/lib/projects";
 import { formatINR, formatDate } from "@/lib/format";
 import { useSettings } from "@/components/settings-provider";
 
+// "2025-07" → "Jul 2025"
+const formatBillingMonth = (m: string) =>
+  m ? new Date(`${m}-01`).toLocaleString("en-IN", { month: "short", year: "numeric" }) : "—";
+
 export default function PaymentsPage() {
   const [payments, setPayments] = useState<PaymentWithClient[]>([]);
   const [clients, setClients] = useState<ClientSummary[]>([]);
@@ -170,7 +174,7 @@ export default function PaymentsPage() {
           : "";
       const haystack = `${p.clients?.name ?? ""} ${p.clients?.company ?? ""} ${p.reference_number ?? ""} ${p.notes ?? ""} ${linked}`.toLowerCase();
       const matchesQuery = !q || haystack.includes(q);
-      const matchesMonth = !month || p.payment_date.startsWith(month);
+      const matchesMonth = !month || p.billing_month === month; // filter by billing period, not receipt date
       const matchesClient = client === "all" || p.client_id === client;
       const matchesMethod = method === "all" || p.payment_method === method;
       return matchesQuery && matchesMonth && matchesClient && matchesMethod;
@@ -300,7 +304,8 @@ export default function PaymentsPage() {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Date</TableHead>
+              <TableHead>Billing Month</TableHead>
+              <TableHead>Received On</TableHead>
               <TableHead>Client</TableHead>
               <TableHead className="text-right">Amount</TableHead>
               <TableHead>Applied To</TableHead>
@@ -312,19 +317,20 @@ export default function PaymentsPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center">
+                <TableCell colSpan={8} className="h-32 text-center">
                   <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
                 </TableCell>
               </TableRow>
             ) : filtered.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={8} className="h-32 text-center text-sm text-muted-foreground">
                   {payments.length === 0 ? "No payments recorded yet" : "No results found"}
                 </TableCell>
               </TableRow>
             ) : (
               filtered.map((p) => (
                 <TableRow key={p.id} className="cursor-pointer" onClick={() => setViewing(p)}>
+                  <TableCell className="font-medium">{formatBillingMonth(p.billing_month)}</TableCell>
                   <TableCell className="text-muted-foreground">{formatDate(p.payment_date)}</TableCell>
                   <TableCell>
                     <Link

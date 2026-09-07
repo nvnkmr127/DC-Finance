@@ -4,6 +4,7 @@ import "./globals.css";
 import { Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
 import { Toaster } from "@/components/ui/sonner";
+import { AiAssistant } from "@/components/ai-assistant";
 import { SettingsProvider } from "@/components/settings-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/components/auth-provider";
@@ -51,6 +52,7 @@ export default function RootLayout({
                 <main className="flex-1 min-w-0 bg-muted/30 p-4 sm:p-6 lg:p-8">{children}</main>
               </div>
             </div>
+            <AiAssistant />
             <Toaster />
           </SettingsProvider>
           </AuthProvider>

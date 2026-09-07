@@ -13,6 +13,7 @@ import {
   Wallet,
   Target,
   ScrollText,
+  BarChart3,
   Settings,
   type LucideIcon,
 } from "lucide-react";
@@ -30,6 +31,7 @@ const ICONS: [string, LucideIcon][] = [
   ["/salaries", Wallet],
   ["/budgets", Target],
   ["/statements", ScrollText],
+  ["/reports", BarChart3],
   ["/audit", ScrollText],
   ["/settings", Settings],
 ];

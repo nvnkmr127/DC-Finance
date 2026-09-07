@@ -36,12 +36,14 @@ import {
 import { useSettings } from "@/components/settings-provider";
 
 const today = () => new Date().toISOString().slice(0, 10);
+const thisMonth = () => new Date().toISOString().slice(0, 7);
 
 const emptyValues = (): PaymentInput => ({
   client_id: "",
   invoice_id: "",
   project_id: "",
   amount: 0,
+  billing_month: thisMonth(),
   payment_date: today(),
   payment_method: "Bank Transfer",
   reference_number: "",
@@ -123,6 +125,7 @@ export function PaymentForm({
             invoice_id: payment.invoice_id ?? "",
             project_id: payment.project_id ?? "",
             amount: payment.amount,
+            billing_month: payment.billing_month,
             payment_date: payment.payment_date,
             payment_method: payment.payment_method as PaymentInput["payment_method"],
             reference_number: payment.reference_number ?? "",
@@ -269,6 +272,9 @@ export function PaymentForm({
             <div className="grid gap-4 sm:grid-cols-2">
               <Field label="Amount" htmlFor="amount" required error={errors.amount?.message}>
                 <MoneyInput id="amount" aria-invalid={!!errors.amount} {...register("amount", { valueAsNumber: true })} placeholder="0" />
+              </Field>
+              <Field label="Billing Month" htmlFor="billing_month" required error={errors.billing_month?.message}>
+                <Input id="billing_month" type="month" aria-invalid={!!errors.billing_month} {...register("billing_month")} />
               </Field>
               <Field label="Payment Date" htmlFor="payment_date" required error={errors.payment_date?.message}>
                 <Input id="payment_date" type="date" aria-invalid={!!errors.payment_date} {...register("payment_date")} />

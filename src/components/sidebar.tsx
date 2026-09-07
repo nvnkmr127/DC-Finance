@@ -14,6 +14,7 @@ import {
   Wallet,
   Target,
   ScrollText,
+  BarChart3,
   Settings,
   LogOut,
   type LucideIcon,
@@ -56,6 +57,7 @@ const groups: { title: string; items: NavItem[] }[] = [
     items: [
       { href: "/budgets", label: "Budgets", icon: Target },
       { href: "/statements", label: "Statements", icon: ScrollText },
+      { href: "/reports", label: "Reports", icon: BarChart3 },
     ],
   },
   {

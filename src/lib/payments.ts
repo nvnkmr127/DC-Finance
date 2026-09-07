@@ -6,7 +6,8 @@ export const paymentSchema = z.object({
   invoice_id: z.string().optional().or(z.literal("")),
   project_id: z.string().optional().or(z.literal("")),
   amount: z.number({ error: "Enter an amount" }).positive("Must be greater than 0"),
-  payment_date: z.string().min(1, "Select a payment date"),
+  billing_month: z.string().min(1, "Select the billing month"), // period the payment is for, "YYYY-MM"
+  payment_date: z.string().min(1, "Select a payment date"),      // when it was received
   payment_method: z.string().min(1, "Select a payment method"),
   reference_number: z.string().max(100).optional().or(z.literal("")),
   notes: z.string().max(1000).optional().or(z.literal("")),
@@ -21,6 +22,7 @@ export type PaymentWithClient = {
   invoice_id: string | null;
   project_id: string | null;
   amount: number;
+  billing_month: string;
   payment_date: string;
   payment_method: string;
   reference_number: string | null;

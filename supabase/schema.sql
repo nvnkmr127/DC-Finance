@@ -33,6 +33,7 @@ create table if not exists public.payments (
   id             uuid primary key default gen_random_uuid(),
   client_id      uuid not null references public.clients(id) on delete restrict,
   amount         numeric not null default 0,
+  billing_month  text not null default to_char(now(), 'YYYY-MM'),
   payment_date   date not null default now(),
   payment_method text not null default 'Bank Transfer',
   reference_number text,
