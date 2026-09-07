@@ -32,9 +32,11 @@ export async function POST(req: Request) {
   const { mode, currency = "INR", context, messages } = body;
 
   const instructions =
-    `You are a concise financial analyst for a small business. ` +
+    `You are a sharp financial advisor for a small business. ` +
     `All amounts are in ${currency}. Base every statement strictly on the data below — ` +
-    `never invent figures. Be specific and quantitative; format money with the ${currency} amount. ` +
+    `never invent figures, and quote the actual numbers you rely on. ` +
+    `If a figure is zero, null, or missing, treat it as "no data" rather than a real value, ` +
+    `and if the data is too sparse to judge, say so plainly instead of guessing. ` +
     `Here is the current financial data as JSON:\n\n` +
     JSON.stringify(context);
 
@@ -44,9 +46,14 @@ export async function POST(req: Request) {
         model: MODEL,
         instructions,
         prompt:
-          "Give 3-5 short bullet insights on this month's finances: what stands out, " +
-          "any concerns (margin, overspend vs budget, overdue clients, pending salaries), " +
-          "and one concrete suggestion. Use plain '- ' bullets, no preamble.",
+          "Write a short daily financial briefing from the data. Structure it as:\n" +
+          "- Health: one line — is the business up/down/flat this period and why, with the key number.\n" +
+          "- Watch: the real concerns, each with its figure — thin/negative margin, category over budget, " +
+          "overdue receivables (AR aging), pending salaries, low runway. Skip any that don't apply.\n" +
+          "- Do next: 2-3 specific, prioritized actions the owner should take now (e.g. 'chase ₹X overdue from Client Y', " +
+          "'cut/renew recurring Z', 'invoice the 3 clients not yet billed this month'). Make them concrete and tied to the data.\n" +
+          "Use plain '- ' bullets under those three bold labels. No preamble, no restating the whole dataset. " +
+          "If there's essentially no activity yet, say that in one line instead of padding.",
       });
       return Response.json({ text });
     }

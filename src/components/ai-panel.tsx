@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Sparkles, Loader2 } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,8 +17,9 @@ async function askAi(payload: object): Promise<string> {
 }
 
 // Dashboard insights card. Chat lives in the floating AiChatWidget.
-// autoDaily: generate once per calendar day and cache in localStorage, so the
-// dashboard shows a fresh summary each day without a click or repeat AI calls.
+// autoDaily: shows a cached summary and regenerates automatically whenever the
+// underlying data changes (fingerprint of the context), so it always reflects
+// what's on the dashboard — and it refreshes fresh each new day.
 export function AiPanel({
   context,
   currency,
@@ -32,9 +33,14 @@ export function AiPanel({
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [asOf, setAsOf] = useState<string | null>(null);
-  const autoRan = useRef(false);
+  const lastFp = useRef<string | null>(null);
 
-  const todayKey = () => `ai-daily-summary-${new Date().toISOString().slice(0, 10)}`;
+  // Fingerprint of the data + day: changes when figures change or the date rolls.
+  const fingerprint = useMemo(
+    () => `${new Date().toISOString().slice(0, 10)}|${JSON.stringify(context)}`,
+    [context],
+  );
+  const cacheKey = "ai-daily-summary";
 
   async function generate() {
     setLoading(true);
@@ -43,10 +49,8 @@ export function AiPanel({
       const text = await askAi({ mode: "insights", currency, context });
       setInsights(text);
       if (autoDaily) {
-        try {
-          localStorage.setItem(todayKey(), text);
-        } catch { /* storage unavailable — non-fatal */ }
-        setAsOf(new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short" }));
+        try { localStorage.setItem(cacheKey, JSON.stringify({ fp: fingerprint, text })); } catch { /* non-fatal */ }
+        setAsOf(new Date().toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }));
       }
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Failed");
@@ -55,20 +59,23 @@ export function AiPanel({
     }
   }
 
-  // On mount (dashboard only): show today's cached summary, or generate it once.
+  // Auto-summary: reuse the cache when the data is unchanged, else regenerate.
   useEffect(() => {
-    if (!autoDaily || autoRan.current) return;
-    autoRan.current = true;
-    let cached: string | null = null;
-    try { cached = localStorage.getItem(todayKey()); } catch { /* ignore */ }
-    if (cached) {
-      setInsights(cached);
+    if (!autoDaily || lastFp.current === fingerprint) return;
+    lastFp.current = fingerprint;
+    let cached: { fp: string; text: string } | null = null;
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      cached = raw ? JSON.parse(raw) : null;
+    } catch { /* ignore */ }
+    if (cached && cached.fp === fingerprint) {
+      setInsights(cached.text);
       setAsOf(new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short" }));
     } else {
       generate();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoDaily]);
+  }, [autoDaily, fingerprint]);
 
   return (
     <Card>
@@ -81,7 +88,7 @@ export function AiPanel({
           <CardDescription>
             {autoDaily
               ? asOf
-                ? `Auto-generated for ${asOf} · updates once a day`
+                ? `Updated ${asOf} · refreshes when your data changes`
                 : "Your daily financial briefing, powered by AI"
               : "Plain-English read on this month, powered by AI"}
           </CardDescription>
