@@ -23,6 +23,7 @@ import { Input } from "@/components/ui/input";
 import { StatCard } from "@/components/stat-card";
 import { PageHeader } from "@/components/page-header";
 import { AiPanel } from "@/components/ai-panel";
+import { AiChatWidget } from "@/components/ai-chat-widget";
 import {
   RevenueExpenseLineChart,
   ProfitBarChart,
@@ -270,6 +271,28 @@ export default function DashboardPage() {
     year: "numeric",
   });
 
+  const currency = settings?.default_currency || "INR";
+  // Shared with both the insights card and the floating chat widget.
+  const aiContext = {
+    month: monthLabel,
+    revenue: d.selected.revenue,
+    expenses: d.selected.expenses,
+    salaries: d.selected.salaries,
+    netProfit: d.selected.profit,
+    netMarginPct: d.selected.revenue ? Math.round((d.selected.profit / d.selected.revenue) * 100) : null,
+    cashBalance: d.cashBalance,
+    outstanding: d.outstanding,
+    recurringMonthly: d.totalRecurring,
+    momChangePct: d.deltas,
+    financialYearToDate: d.fytd,
+    topClientsThisMonth: d.topClients,
+    clientsWithOutstanding: d.clientsWithOutstanding,
+    pendingSalaries: d.pendingSalaries,
+    budgetVsActual: d.budgetRows,
+    expensesByCategory: d.categories,
+    monthlyTrend: d.months.map((m) => ({ month: m.month, revenue: m.revenue, expenses: m.totalExpenses, profit: m.profit })),
+  };
+
   return (
     <div className="space-y-6">
       <PageHeader
@@ -319,7 +342,7 @@ export default function DashboardPage() {
               <CardTitle className="text-base">Financial Year to Date · {d.fytd.label}</CardTitle>
               <CardDescription>Cumulative since the start of the financial year</CardDescription>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <CardContent className="grid grid-cols-2 gap-4 sm:grid-cols-4">
               <div>
                 <p className="text-xs text-muted-foreground">Revenue</p>
                 <p className="mt-1 text-xl font-semibold tabular-nums text-emerald-600">{formatCurrency(d.fytd.revenue)}</p>
@@ -334,30 +357,16 @@ export default function DashboardPage() {
                   {formatCurrency(d.fytd.profit)}
                 </p>
               </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Net Margin</p>
+                <p className={cn("mt-1 text-xl font-semibold tabular-nums", d.fytd.profit >= 0 ? "text-emerald-700" : "text-red-700")}>
+                  {d.fytd.revenue ? `${Math.round((d.fytd.profit / d.fytd.revenue) * 100)}%` : "—"}
+                </p>
+              </div>
             </CardContent>
           </Card>
 
-          <AiPanel
-            currency={settings?.default_currency || "INR"}
-            context={{
-              month: monthLabel,
-              revenue: d.selected.revenue,
-              expenses: d.selected.expenses,
-              salaries: d.selected.salaries,
-              netProfit: d.selected.profit,
-              cashBalance: d.cashBalance,
-              outstanding: d.outstanding,
-              recurringMonthly: d.totalRecurring,
-              momChangePct: d.deltas,
-              financialYearToDate: d.fytd,
-              topClientsThisMonth: d.topClients,
-              clientsWithOutstanding: d.clientsWithOutstanding,
-              pendingSalaries: d.pendingSalaries,
-              budgetVsActual: d.budgetRows,
-              expensesByCategory: d.categories,
-              monthlyTrend: d.months.map((m) => ({ month: m.month, revenue: m.revenue, expenses: m.totalExpenses, profit: m.profit })),
-            }}
-          />
+          <AiPanel currency={currency} context={aiContext} />
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <Card className="lg:col-span-2">
@@ -489,6 +498,8 @@ export default function DashboardPage() {
           </div>
         </>
       )}
+
+      {!loading && <AiChatWidget context={aiContext} currency={currency} />}
     </div>
   );
 }
