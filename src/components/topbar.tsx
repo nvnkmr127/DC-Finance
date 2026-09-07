@@ -30,11 +30,11 @@ export function Topbar() {
             <span className="sr-only">Open menu</span>
           </Button>
         </SheetTrigger>
-        <SheetContent side="left" className="w-64 p-0">
-          <SheetHeader className="h-16 justify-center px-6">
+        <SheetContent side="left" className="flex w-64 flex-col p-0">
+          <SheetHeader className="h-16 shrink-0 justify-center border-b px-6">
             <SheetTitle>{settings?.company_name || "Digicloudify Finance"}</SheetTitle>
           </SheetHeader>
-          <div className="py-2">
+          <div className="flex-1 overflow-y-auto py-2">
             <SidebarNav onNavigate={() => setOpen(false)} />
           </div>
         </SheetContent>

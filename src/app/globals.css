@@ -133,6 +133,28 @@
       0 1px 2px 0 oklch(0.45 0.08 162 / 0.05),
       0 2px 8px -1px oklch(0.45 0.08 162 / 0.07);
   }
+  html {
+    scroll-behavior: smooth;
+  }
+  /* Thin, themed scrollbars so long tables/lists scroll cleanly. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 9999px;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--muted-foreground);
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
 }
 /* Print: hide app chrome (sidebar/topbar/controls) and print on white. */
 @media print {
