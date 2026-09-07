@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn } from "@/lib/utils";
+import { RichText } from "@/components/rich-text";
 import { useSettings } from "@/components/settings-provider";
 import { listPayments } from "@/lib/payments";
 import { listExpenses } from "@/lib/expenses";
@@ -187,7 +188,7 @@ export function AiAssistant() {
                   {insights ? "Regenerate" : "Summarize business"}
                 </Button>
                 {insights && (
-                  <div className="whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-sm leading-relaxed">{insights}</div>
+                  <div className="rounded-md border bg-muted/30 p-3"><RichText text={insights} /></div>
                 )}
               </TabsContent>
 
@@ -198,8 +199,8 @@ export function AiAssistant() {
                   ) : (
                     messages.map((m, i) => (
                       <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
-                        <span className={cn("inline-block max-w-[85%] whitespace-pre-wrap rounded-lg px-3 py-2", m.role === "user" ? "bg-primary text-primary-foreground" : "border bg-background")}>
-                          {m.content}
+                        <span className={cn("inline-block max-w-[85%] rounded-lg px-3 py-2", m.role === "user" ? "whitespace-pre-wrap bg-primary text-primary-foreground" : "border bg-background")}>
+                          {m.role === "user" ? m.content : <RichText text={m.content} />}
                         </span>
                       </div>
                     ))

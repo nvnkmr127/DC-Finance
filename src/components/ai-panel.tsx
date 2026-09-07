@@ -1,9 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Sparkles, Loader2, Send } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { RichText } from "@/components/rich-text";
+import { cn } from "@/lib/utils";
+
+type Msg = { role: "user" | "assistant"; content: string };
 
 async function askAi(payload: object): Promise<string> {
   const res = await fetch("/api/ai", {
@@ -34,6 +39,33 @@ export function AiPanel({
   const [err, setErr] = useState<string | null>(null);
   const [asOf, setAsOf] = useState<string | null>(null);
   const lastFp = useRef<string | null>(null);
+
+  // Follow-up questions about the summary, grounded in the same dashboard data.
+  const [messages, setMessages] = useState<Msg[]>([]);
+  const [input, setInput] = useState("");
+  const [chatting, setChatting] = useState(false);
+
+  async function ask() {
+    const q = input.trim();
+    if (!q || chatting) return;
+    const next = [...messages, { role: "user" as const, content: q }];
+    setMessages(next);
+    setInput("");
+    setChatting(true);
+    try {
+      // Seed the thread with the summary itself so questions are genuine
+      // follow-ups ("expand on point 2", "why did you say cash is negative?").
+      const thread = insights
+        ? [{ role: "assistant" as const, content: `Here is the summary I gave you:\n\n${insights}` }, ...next]
+        : next;
+      const reply = await askAi({ mode: "chat", currency, context, messages: thread });
+      setMessages([...next, { role: "assistant", content: reply }]);
+    } catch (e) {
+      setMessages([...next, { role: "assistant", content: `⚠️ ${e instanceof Error ? e.message : "Failed"}` }]);
+    } finally {
+      setChatting(false);
+    }
+  }
 
   // Fingerprint of the data + day: changes when figures change or the date rolls.
   const fingerprint = useMemo(
@@ -101,8 +133,8 @@ export function AiPanel({
       <CardContent>
         {err && <p className="text-sm text-destructive">{err}</p>}
         {insights ? (
-          <div className="whitespace-pre-wrap rounded-md border bg-muted/30 p-3 text-sm leading-relaxed">
-            {insights}
+          <div className="rounded-md border bg-muted/30 p-3">
+            <RichText text={insights} />
           </div>
         ) : (
           !err && (
@@ -110,6 +142,36 @@ export function AiPanel({
               Click Generate for bullet insights on margins, overspend, overdue clients, and pending salaries.
             </p>
           )
+        )}
+
+        {/* Follow-up questions about the summary */}
+        {insights && (
+          <div className="mt-4 space-y-3 border-t pt-3">
+            {messages.map((m, i) => (
+              <div key={i} className={cn("flex", m.role === "user" ? "justify-end" : "justify-start")}>
+                <span
+                  className={cn(
+                    "inline-block max-w-[90%] rounded-lg px-3 py-2 text-sm",
+                    m.role === "user" ? "whitespace-pre-wrap bg-primary text-primary-foreground" : "border bg-background",
+                  )}
+                >
+                  {m.role === "user" ? m.content : <RichText text={m.content} />}
+                </span>
+              </div>
+            ))}
+            {chatting && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+            <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); ask(); }}>
+              <Input
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask a follow-up…"
+                disabled={chatting}
+              />
+              <Button type="submit" size="icon" disabled={chatting || !input.trim()}>
+                <Send className="h-4 w-4" />
+              </Button>
+            </form>
+          </div>
         )}
       </CardContent>
     </Card>
