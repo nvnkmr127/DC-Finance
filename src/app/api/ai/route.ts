@@ -1,7 +1,9 @@
 import { generateText } from "ai";
 
 // Vercel AI Gateway. Auth via AI_GATEWAY_API_KEY (or OIDC on Vercel).
-const MODEL = "anthropic/claude-sonnet-5";
+// Free model ($0 in/out via the gateway), finance-tuned, 256K context.
+// Swap to e.g. "anthropic/claude-sonnet-5" for higher quality at a cost.
+const MODEL = "inclusionai/ling-3.0-flash-fin-free";
 
 export const maxDuration = 60;
 
