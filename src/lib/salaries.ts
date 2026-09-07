@@ -23,6 +23,12 @@ export async function listEmployees(): Promise<Employee[]> {
   return data as Employee[];
 }
 
+export async function getEmployee(id: string): Promise<Employee> {
+  const { data, error } = await getSupabase().from("employees").select("*").eq("id", id).single();
+  if (error) throw new Error(error.message);
+  return data as Employee;
+}
+
 export async function createEmployee(input: EmployeeInput): Promise<void> {
   const { error } = await getSupabase().from("employees").insert(input);
   if (error) throw new Error(error.message);
@@ -113,6 +119,16 @@ export async function listSalaryPayments(): Promise<SalaryPayment[]> {
     .from("salary_payments")
     .select("*, employees(name, designation)")
     .order("payment_date", { ascending: false });
+  if (error) throw new Error(error.message);
+  return data as unknown as SalaryPayment[];
+}
+
+export async function getEmployeeSalaryPayments(employeeId: string): Promise<SalaryPayment[]> {
+  const { data, error } = await getSupabase()
+    .from("salary_payments")
+    .select("*, employees(name, designation)")
+    .eq("employee_id", employeeId)
+    .order("salary_month", { ascending: false });
   if (error) throw new Error(error.message);
   return data as unknown as SalaryPayment[];
 }

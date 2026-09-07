@@ -55,6 +55,33 @@ export async function createPayment(input: PaymentInput): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
+// Insert several payment rows at once (e.g. a quarterly lump split into 3 months).
+export async function createPayments(inputs: PaymentInput[]): Promise<void> {
+  if (!inputs.length) return;
+  const { error } = await getSupabase().from("payments").insert(inputs.map(normalize));
+  if (error) throw new Error(error.message);
+}
+
+// "2025-07" + 2 → "2025-09"
+export function addMonths(ym: string, n: number): string {
+  if (!ym) return "";
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(y, m - 1 + n, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+// Split a quarterly lump into 3 monthly rows (billing months m, m+1, m+2),
+// with cents balanced so the three amounts sum exactly to the total.
+export function splitQuarterly(input: PaymentInput): PaymentInput[] {
+  const per = Math.round((input.amount / 3) * 100) / 100;
+  const amounts = [per, per, Math.round((input.amount - per * 2) * 100) / 100];
+  return amounts.map((amount, i) => ({
+    ...input,
+    amount,
+    billing_month: addMonths(input.billing_month, i),
+  }));
+}
+
 export async function updatePayment(id: string, input: PaymentInput): Promise<void> {
   const { error } = await getSupabase().from("payments").update(normalize(input)).eq("id", id);
   if (error) throw new Error(error.message);

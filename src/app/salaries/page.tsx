@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { MoreHorizontal, Pencil, Trash2, Power, Loader2, AlertCircle } from "lucide-react";
+import Link from "next/link";
+import { MoreHorizontal, Pencil, Trash2, Power, Loader2, AlertCircle, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -352,7 +353,9 @@ export default function SalariesPage() {
                 ) : (
                   filteredEmployees.map((e) => (
                     <TableRow key={e.id} className={cn(e.status !== "active" && "opacity-60")}>
-                      <TableCell className="font-medium">{e.name}</TableCell>
+                      <TableCell className="font-medium">
+                        <Link href={`/salaries/${e.id}`} className="hover:underline">{e.name}</Link>
+                      </TableCell>
                       <TableCell className="text-muted-foreground">{e.designation}</TableCell>
                       <TableCell className="text-right tabular-nums">
                         {formatINR(e.salary)}
@@ -369,6 +372,12 @@ export default function SalariesPage() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem asChild>
+                              <Link href={`/salaries/${e.id}`}>
+                                <Eye className="h-4 w-4" />
+                                View
+                              </Link>
+                            </DropdownMenuItem>
                             <DropdownMenuItem onSelect={() => setEditEmp(e)}>
                               <Pencil className="h-4 w-4" />
                               Edit

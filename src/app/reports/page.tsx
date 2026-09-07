@@ -14,6 +14,7 @@ import { BreakdownDonut, HorizontalBar } from "@/components/charts";
 import { listPayments, type PaymentWithClient } from "@/lib/payments";
 import { listExpenses, type Expense } from "@/lib/expenses";
 import { listSalaryPayments, netSalary, type SalaryPayment } from "@/lib/salaries";
+import { listInvoices, type InvoiceSummary } from "@/lib/invoices";
 import { financialYear } from "@/lib/format";
 import { downloadCSV } from "@/lib/statements";
 import { useSettings } from "@/components/settings-provider";
@@ -46,6 +47,7 @@ export default function ReportsPage() {
   const [payments, setPayments] = useState<PaymentWithClient[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [salaries, setSalaries] = useState<SalaryPayment[]>([]);
+  const [invoices, setInvoices] = useState<InvoiceSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -57,10 +59,11 @@ export default function ReportsPage() {
   useEffect(() => {
     (async () => {
       try {
-        const [p, e, s] = await Promise.all([listPayments(), listExpenses(), listSalaryPayments()]);
+        const [p, e, s, inv] = await Promise.all([listPayments(), listExpenses(), listSalaryPayments(), listInvoices()]);
         setPayments(p);
         setExpenses(e);
         setSalaries(s);
+        setInvoices(inv);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load report");
       } finally {
@@ -120,7 +123,15 @@ export default function ReportsPage() {
       worst,
     };
 
-    return { revenue, expenseTotal, salaryTotal, profit, margin, byClient, byCategory, byEmployee, byMethod, monthly, analytics };
+    // Client profitability: overhead (all expenses + salaries) has no per-client
+    // tag, so allocate it by each client's share of revenue. Estimate, labelled.
+    const clientProfit = byClient.map((c) => {
+      const cost = revenue ? totalCost * (c.value / revenue) : 0;
+      const p = c.value - cost;
+      return { name: c.name, revenue: c.value, cost, profit: p, margin: c.value ? Math.round((p / c.value) * 100) : 0 };
+    });
+
+    return { revenue, expenseTotal, salaryTotal, profit, margin, byClient, byCategory, byEmployee, byMethod, monthly, analytics, clientProfit };
   }, [payments, expenses, salaries, from, to, fy]);
 
   // Quick period presets. Custom leaves the date inputs for manual editing.
@@ -149,6 +160,29 @@ export default function ReportsPage() {
     setFrom(`${m}-01`);
     setTo(`${m}-${String(lastDay).padStart(2, "0")}`);
   }
+
+  // Accounts-receivable aging as of today (not period-bound): outstanding,
+  // non-cancelled/non-draft invoices bucketed by how overdue they are.
+  const aging = useMemo(() => {
+    const today = new Date();
+    const buckets = [
+      { label: "Not due yet", count: 0, amount: 0 },
+      { label: "1–30 days", count: 0, amount: 0 },
+      { label: "31–60 days", count: 0, amount: 0 },
+      { label: "61–90 days", count: 0, amount: 0 },
+      { label: "90+ days", count: 0, amount: 0 },
+    ];
+    for (const i of invoices) {
+      if (i.balance <= 0 || i.display_status === "cancelled" || i.display_status === "draft") continue;
+      const days = Math.floor((today.getTime() - new Date(`${i.due_date}T00:00:00`).getTime()) / 86400000);
+      const b = days <= 0 ? 0 : days <= 30 ? 1 : days <= 60 ? 2 : days <= 90 ? 3 : 4;
+      buckets[b].count++;
+      buckets[b].amount += i.balance;
+    }
+    const totalOutstanding = buckets.reduce((s, b) => s + b.amount, 0);
+    const overdue = buckets.slice(1).reduce((s, b) => s + b.amount, 0);
+    return { buckets, totalOutstanding, overdue };
+  }, [invoices]);
 
   function exportCsv() {
     downloadCSV(
@@ -227,6 +261,8 @@ export default function ReportsPage() {
               analytics: r.analytics,
               monthly: r.monthly,
               revenueByClient: r.byClient,
+              clientProfitability: r.clientProfit,
+              accountsReceivableAging: { asOfToday: true, totalOutstanding: aging.totalOutstanding, overdue: aging.overdue, buckets: aging.buckets },
               expensesByCategory: r.byCategory,
               salariesByEmployee: r.byEmployee,
               paymentMethods: r.byMethod,
@@ -339,6 +375,77 @@ export default function ReportsPage() {
                       <TableCell className="font-semibold">Total</TableCell>
                       <TableCell className="text-right font-semibold tabular-nums">{formatCurrency(r.salaryTotal)}</TableCell>
                     </TableRow>
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Receivables Aging</CardTitle>
+              <CardDescription>
+                Outstanding invoices as of today ·{" "}
+                <span className="font-medium text-foreground">{formatCurrency(aging.totalOutstanding)}</span> total
+                {aging.overdue > 0 && <span className="ml-1 font-medium text-amber-600">· {formatCurrency(aging.overdue)} overdue</span>}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Age</TableHead>
+                    <TableHead className="text-right">Invoices</TableHead>
+                    <TableHead className="text-right">Amount</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {aging.buckets.map((b, i) => (
+                    <TableRow key={b.label}>
+                      <TableCell className={i === 0 ? "font-medium" : "font-medium text-amber-700"}>{b.label}</TableCell>
+                      <TableCell className="text-right tabular-nums text-muted-foreground">{b.count}</TableCell>
+                      <TableCell className="text-right tabular-nums">{formatCurrency(b.amount)}</TableCell>
+                    </TableRow>
+                  ))}
+                  <TableRow>
+                    <TableCell className="font-semibold">Total Outstanding</TableCell>
+                    <TableCell />
+                    <TableCell className="text-right font-semibold tabular-nums">{formatCurrency(aging.totalOutstanding)}</TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Client Profitability</CardTitle>
+              <CardDescription>Revenue minus overhead (expenses + salaries) allocated by revenue share — an estimate</CardDescription>
+            </CardHeader>
+            <CardContent className="overflow-x-auto">
+              {r.clientProfit.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No revenue in this period.</p>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Client</TableHead>
+                      <TableHead className="text-right">Revenue</TableHead>
+                      <TableHead className="text-right">Allocated Cost</TableHead>
+                      <TableHead className="text-right">Profit</TableHead>
+                      <TableHead className="text-right">Margin</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {r.clientProfit.map((c) => (
+                      <TableRow key={c.name}>
+                        <TableCell className="font-medium">{c.name}</TableCell>
+                        <TableCell className="text-right tabular-nums text-emerald-600">{formatCurrency(c.revenue)}</TableCell>
+                        <TableCell className="text-right tabular-nums text-red-600">{formatCurrency(c.cost)}</TableCell>
+                        <TableCell className={`text-right font-semibold tabular-nums ${c.profit >= 0 ? "text-emerald-700" : "text-red-700"}`}>{formatCurrency(c.profit)}</TableCell>
+                        <TableCell className={`text-right tabular-nums ${c.margin >= 0 ? "text-muted-foreground" : "text-red-600"}`}>{c.margin}%</TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               )}

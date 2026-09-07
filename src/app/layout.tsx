@@ -5,6 +5,7 @@ import { Sidebar } from "@/components/sidebar";
 import { Topbar } from "@/components/topbar";
 import { Toaster } from "@/components/ui/sonner";
 import { AiAssistant } from "@/components/ai-assistant";
+import { CommandPalette } from "@/components/command-palette";
 import { SettingsProvider } from "@/components/settings-provider";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AuthProvider } from "@/components/auth-provider";
@@ -53,6 +54,7 @@ export default function RootLayout({
               </div>
             </div>
             <AiAssistant />
+            <CommandPalette />
             <Toaster />
           </SettingsProvider>
           </AuthProvider>

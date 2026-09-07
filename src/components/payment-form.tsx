@@ -29,11 +29,19 @@ import { Field, MoneyInput } from "@/components/form-field";
 import {
   paymentSchema,
   createPayment,
+  createPayments,
   updatePayment,
+  splitQuarterly,
+  addMonths,
   type PaymentInput,
   type PaymentWithClient,
 } from "@/lib/payments";
+import type { BillingCycle } from "@/lib/clients";
+import { formatINR } from "@/lib/format";
 import { useSettings } from "@/components/settings-provider";
+
+const monthLabel = (ym: string) =>
+  ym ? new Date(`${ym}-01`).toLocaleString("en-IN", { month: "short", year: "2-digit" }) : "";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const thisMonth = () => new Date().toISOString().slice(0, 7);
@@ -74,7 +82,7 @@ export function PaymentForm({
   onSaved,
   showTrigger = false,
 }: {
-  clients: { id: string; name: string; company: string; monthly_value?: number }[];
+  clients: { id: string; name: string; company: string; monthly_value?: number; billing_cycle?: BillingCycle }[];
   invoices?: PaymentInvoiceOption[];
   projects?: PaymentProjectOption[];
   payment?: PaymentWithClient;
@@ -103,7 +111,11 @@ export function PaymentForm({
   });
 
   const selectedClient = useWatch({ control, name: "client_id" });
-  // Open invoices for the chosen client (plus the one already linked, if editing).
+  const [amountW, billingMonthW] = useWatch({ control, name: ["amount", "billing_month"] });
+  // Quarterly clients pay a lump covering 3 months — split it on save (create only).
+  const cycle = clients.find((c) => c.id === selectedClient)?.billing_cycle;
+  const quarterlySplit = !payment && cycle === "quarterly";
+  const perMonth = amountW ? Math.round((amountW / 3) * 100) / 100 : 0;
   const clientInvoices = invoices.filter(
     (inv) =>
       inv.client_id === selectedClient &&
@@ -140,6 +152,9 @@ export function PaymentForm({
       if (payment) {
         await updatePayment(payment.id, values);
         toast.success("Payment updated");
+      } else if (cycle === "quarterly") {
+        await createPayments(splitQuarterly(values));
+        toast.success("Recorded quarterly payment as 3 monthly entries");
       } else {
         await createPayment(values);
         toast.success("Payment recorded");
@@ -273,13 +288,24 @@ export function PaymentForm({
               <Field label="Amount" htmlFor="amount" required error={errors.amount?.message}>
                 <MoneyInput id="amount" aria-invalid={!!errors.amount} {...register("amount", { valueAsNumber: true })} placeholder="0" />
               </Field>
-              <Field label="Billing Month" htmlFor="billing_month" required error={errors.billing_month?.message}>
+              <Field label={quarterlySplit ? "Quarter Starting" : "Billing Month"} htmlFor="billing_month" required error={errors.billing_month?.message}>
                 <Input id="billing_month" type="month" aria-invalid={!!errors.billing_month} {...register("billing_month")} />
               </Field>
               <Field label="Payment Date" htmlFor="payment_date" required error={errors.payment_date?.message}>
                 <Input id="payment_date" type="date" aria-invalid={!!errors.payment_date} {...register("payment_date")} />
               </Field>
             </div>
+
+            {quarterlySplit && (
+              <p className="rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs text-muted-foreground">
+                Quarterly client — this records <span className="font-medium text-foreground">3 monthly payments</span> of{" "}
+                <span className="font-medium text-foreground">{formatINR(perMonth)}</span> each for{" "}
+                <span className="font-medium text-foreground">
+                  {monthLabel(billingMonthW)}, {monthLabel(addMonths(billingMonthW || "", 1))}, {monthLabel(addMonths(billingMonthW || "", 2))}
+                </span>
+                . Enter the full quarter amount above.
+              </p>
+            )}
 
             <Field label="Payment Method" htmlFor="payment_method" required error={errors.payment_method?.message}>
               <Controller

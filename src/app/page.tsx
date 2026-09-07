@@ -251,6 +251,30 @@ export default function DashboardPage() {
       return { id: e.id, name: e.name, remaining };
     }).filter(e => e.remaining > 0).sort((a, b) => b.remaining - a.remaining);
 
+    // Forward-looking cash-flow forecast — a run-rate estimate:
+    //   expected monthly revenue = active clients' recurring/contract value
+    //   expected monthly cost    = active payroll + trailing-3-month expense avg
+    // ponytail: run-rate heuristic, not a per-invoice projection; good enough for runway.
+    const expectedRevenue = clients.filter((c) => c.status === "active").reduce((s, c) => s + monthlyEquivalent(c), 0);
+    const payroll = employees.filter((e) => e.status === "active").reduce((s, e) => s + e.salary, 0);
+    const recent3 = months.slice(-3);
+    const avgExpenses = recent3.length ? recent3.reduce((s, m) => s + m.expenses, 0) / recent3.length : 0;
+    const expectedCost = payroll + avgExpenses;
+    const netPerMonth = expectedRevenue - expectedCost;
+    const [fy0, fm0] = month.split("-").map(Number);
+    let running = cashBalance;
+    const forecast = Array.from({ length: 6 }, (_, i) => {
+      running += netPerMonth;
+      const dt = new Date(fy0, fm0 - 1 + i + 1, 1);
+      return {
+        key: `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`,
+        label: dt.toLocaleString("en-IN", { month: "short", year: "2-digit" }),
+        cash: running,
+      };
+    });
+    const runwayMonths = netPerMonth < 0 && cashBalance > 0 ? cashBalance / -netPerMonth : null;
+    const fc = { expectedRevenue, expectedCost, netPerMonth, runwayMonths, forecast };
+
     // Budget vs actual for the month — only categories with a budget set.
     const actualByCat = new Map(categories.map((c) => [c.name, c.value]));
     const budgetRows = budgets
@@ -262,6 +286,7 @@ export default function DashboardPage() {
       selected,
       deltas,
       cashBalance,
+      fc,
       outstanding,
       totalRecurring,
       fytd,
@@ -302,6 +327,7 @@ export default function DashboardPage() {
     budgetVsActual: d.budgetRows,
     expensesByCategory: d.categories,
     monthlyTrend: d.months.map((m) => ({ month: m.month, revenue: m.revenue, expenses: m.totalExpenses, profit: m.profit })),
+    cashFlowForecast: { expectedMonthlyRevenue: d.fc.expectedRevenue, expectedMonthlyCost: d.fc.expectedCost, netPerMonth: d.fc.netPerMonth, runwayMonths: d.fc.runwayMonths, projected: d.fc.forecast },
   };
 
   return (
@@ -377,7 +403,50 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <AiPanel currency={currency} context={aiContext} />
+          <AiPanel currency={currency} context={aiContext} autoDaily />
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base">Cash-Flow Forecast</CardTitle>
+              <CardDescription>
+                Run-rate estimate from active contracts, payroll and recent spend
+                {d.fc.runwayMonths != null && (
+                  <span className="ml-1 font-medium text-amber-600">· ~{d.fc.runwayMonths.toFixed(1)} months runway</span>
+                )}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+                <div>
+                  <p className="text-xs text-muted-foreground">Expected Revenue / mo</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums text-emerald-600">{formatCurrency(d.fc.expectedRevenue)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Expected Cost / mo</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums text-red-600">{formatCurrency(d.fc.expectedCost)}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Net / mo</p>
+                  <p className={cn("mt-1 text-lg font-semibold tabular-nums", d.fc.netPerMonth >= 0 ? "text-emerald-700" : "text-red-700")}>
+                    {d.fc.netPerMonth >= 0 ? "+" : ""}{formatCurrency(d.fc.netPerMonth)}
+                  </p>
+                </div>
+              </div>
+              <div className="overflow-x-auto">
+                <div className="flex min-w-max gap-3">
+                  {d.fc.forecast.map((f) => (
+                    <div key={f.key} className="min-w-24 flex-1 rounded-md border bg-muted/30 p-2 text-center">
+                      <p className="text-xs text-muted-foreground">{f.label}</p>
+                      <p className={cn("mt-1 text-sm font-semibold tabular-nums", f.cash >= 0 ? "text-foreground" : "text-red-600")}>
+                        {formatCurrency(f.cash)}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground">Projected cash at each month-end, starting from the current cash balance.</p>
+            </CardContent>
+          </Card>
 
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <Card className="lg:col-span-2">

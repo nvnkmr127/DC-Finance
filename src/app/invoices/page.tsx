@@ -50,6 +50,7 @@ import { PageHeader } from "@/components/page-header";
 import { MetricCard } from "@/components/metric-card";
 import { StatusBadge } from "@/components/status-badge";
 import { InvoiceForm } from "@/components/invoice-form";
+import { GenerateInvoicesDialog } from "@/components/generate-invoices-dialog";
 import {
   listInvoices,
   deleteInvoice,
@@ -153,7 +154,12 @@ export default function InvoicesPage() {
       <PageHeader
         title="Invoices"
         description={loading ? "Loading…" : `${rows.length} invoices`}
-        action={<InvoiceForm clients={clientOpts} showTrigger onSaved={refetch} />}
+        action={
+          <div className="flex gap-2">
+            <GenerateInvoicesDialog clients={clients} onDone={refetch} />
+            <InvoiceForm clients={clientOpts} showTrigger onSaved={refetch} />
+          </div>
+        }
       />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">

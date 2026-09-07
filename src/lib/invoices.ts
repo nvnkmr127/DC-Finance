@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getSupabase } from "@/lib/supabase/client";
+import type { BillingCycle } from "@/lib/clients";
 
 // ---- Validation ----------------------------------------------------------
 
@@ -130,6 +131,50 @@ export async function createInvoice(input: InvoiceInput): Promise<void> {
   }));
   const { error: itemsError } = await supabase.from("invoice_items").insert(items);
   if (itemsError) throw new Error(itemsError.message);
+}
+
+// Draft invoices from client billing cycles for a given month (YYYY-MM).
+// Monthly clients are skipped if already invoiced that month; quarterly clients
+// if invoiced in the trailing 3 months (their invoice carries the full quarter
+// amount). Commission clients and zero-value clients are skipped.
+// ponytail: month/quarter dedup by issue-month lookback, no stored billing anchor.
+export async function generateInvoicesForMonth(
+  month: string,
+  clients: { id: string; service: string; monthly_value: number; billing_cycle: BillingCycle; status: string }[],
+  dueDays = 7,
+): Promise<{ created: number; skipped: number }> {
+  const shiftMonth = (ym: string, n: number) => {
+    const [y, m] = ym.split("-").map(Number);
+    const d = new Date(y, m - 1 + n, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  };
+  const existing = await listInvoices();
+  const active = existing.filter((i) => i.status !== "cancelled");
+  const invoicedThisMonth = new Set(active.filter((i) => i.issue_date.slice(0, 7) === month).map((i) => i.client_id));
+  const last3 = [month, shiftMonth(month, -1), shiftMonth(month, -2)];
+  const invoicedRecently = new Set(active.filter((i) => last3.includes(i.issue_date.slice(0, 7))).map((i) => i.client_id));
+
+  const issue_date = `${month}-01`;
+  const due = new Date(`${issue_date}T00:00:00`);
+  due.setDate(due.getDate() + dueDays);
+  const due_date = `${due.getFullYear()}-${String(due.getMonth() + 1).padStart(2, "0")}-${String(due.getDate()).padStart(2, "0")}`;
+
+  let created = 0, skipped = 0;
+  for (const c of clients) {
+    if (c.status !== "active" || c.billing_cycle === "commission" || c.monthly_value <= 0) continue;
+    const dupe = c.billing_cycle === "quarterly" ? invoicedRecently.has(c.id) : invoicedThisMonth.has(c.id);
+    if (dupe) { skipped++; continue; }
+    await createInvoice({
+      client_id: c.id,
+      issue_date,
+      due_date,
+      status: "draft",
+      notes: `Auto-generated for ${month}`,
+      items: [{ description: `${c.service} — ${c.billing_cycle === "quarterly" ? "quarter from" : "month"} ${month}`, quantity: 1, unit_price: c.monthly_value }],
+    });
+    created++;
+  }
+  return { created, skipped };
 }
 
 export async function updateInvoice(id: string, input: InvoiceInput): Promise<void> {
