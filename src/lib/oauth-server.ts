@@ -139,6 +139,8 @@ export async function createAuthorizationCode(params: {
   redirectUri: string;
   userId?: string | null;
   scope?: string;
+  codeChallenge?: string;
+  codeChallengeMethod?: string;
 }): Promise<string> {
   const supabase = getServiceSupabase();
   const code = generateToken("code_");
@@ -150,6 +152,8 @@ export async function createAuthorizationCode(params: {
     redirect_uri: params.redirectUri,
     user_id: params.userId || null,
     scope: params.scope || "finance:read webhooks:write",
+    code_challenge: params.codeChallenge || null,
+    code_challenge_method: params.codeChallengeMethod || null,
     expires_at: expiresAt,
     used: false,
   };
@@ -179,6 +183,7 @@ export async function exchangeCodeForTokens(params: {
   clientId: string;
   clientSecret: string;
   redirectUri: string;
+  codeVerifier?: string;
 }): Promise<{
   access_token: string;
   token_type: string;
@@ -195,7 +200,18 @@ export async function exchangeCodeForTokens(params: {
   }
 
   // 2. Fetch and consume authorization code
-  let codeRow: { id?: string; code: string; client_id: string; redirect_uri: string; user_id: string | null; scope: string; expires_at: string; used: boolean } | null = null;
+  let codeRow: {
+    id?: string;
+    code: string;
+    client_id: string;
+    redirect_uri: string;
+    user_id: string | null;
+    scope: string;
+    expires_at: string;
+    used: boolean;
+    code_challenge?: string | null;
+    code_challenge_method?: string | null;
+  } | null = null;
 
   try {
     const { data, error } = await supabase
@@ -206,13 +222,13 @@ export async function exchangeCodeForTokens(params: {
       .maybeSingle();
 
     if (error && isMissingTableError(error)) {
-      codeRow = memCodes.get(params.code) || null;
+      codeRow = (memCodes.get(params.code) as typeof codeRow) || null;
     } else {
-      codeRow = data || memCodes.get(params.code) || null;
+      codeRow = data || (memCodes.get(params.code) as typeof codeRow) || null;
     }
   } catch (e) {
     if (isMissingTableError(e)) {
-      codeRow = memCodes.get(params.code) || null;
+      codeRow = (memCodes.get(params.code) as typeof codeRow) || null;
     } else {
       throw e;
     }
@@ -232,6 +248,24 @@ export async function exchangeCodeForTokens(params: {
 
   if (codeRow.redirect_uri !== params.redirectUri) {
     throw new Error("invalid_grant: Redirect URI mismatch");
+  }
+
+  // PKCE verification (RFC 7636)
+  if (codeRow.code_challenge) {
+    if (!params.codeVerifier) {
+      throw new Error("invalid_grant: code_verifier is required for PKCE");
+    }
+    const method = (codeRow.code_challenge_method || "S256").toUpperCase();
+    if (method === "S256") {
+      const computed = crypto.createHash("sha256").update(params.codeVerifier).digest("base64url");
+      if (computed !== codeRow.code_challenge) {
+        throw new Error("invalid_grant: PKCE code_verifier verification failed");
+      }
+    } else if (method === "PLAIN") {
+      if (params.codeVerifier !== codeRow.code_challenge) {
+        throw new Error("invalid_grant: PKCE code_verifier verification failed");
+      }
+    }
   }
 
   // Mark code as used

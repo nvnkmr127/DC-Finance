@@ -7,6 +7,8 @@ export async function GET(req: Request) {
   const redirectUri = url.searchParams.get("redirect_uri");
   const state = url.searchParams.get("state") || "";
   const scope = url.searchParams.get("scope") || "finance:read webhooks:write";
+  const codeChallenge = url.searchParams.get("code_challenge") || undefined;
+  const codeChallengeMethod = url.searchParams.get("code_challenge_method") || undefined;
 
   if (!clientId || !redirectUri) {
     return new Response("Missing client_id or redirect_uri", { status: 400 });
@@ -25,6 +27,8 @@ export async function GET(req: Request) {
     consentUrl.searchParams.set("response_type", responseType);
     if (state) consentUrl.searchParams.set("state", state);
     if (scope) consentUrl.searchParams.set("scope", scope);
+    if (codeChallenge) consentUrl.searchParams.set("code_challenge", codeChallenge);
+    if (codeChallengeMethod) consentUrl.searchParams.set("code_challenge_method", codeChallengeMethod);
     return Response.redirect(consentUrl.toString(), 302);
   }
 
@@ -53,6 +57,8 @@ export async function GET(req: Request) {
     clientId,
     redirectUri,
     scope,
+    codeChallenge,
+    codeChallengeMethod,
   });
 
   // Redirect back to caller with code & state

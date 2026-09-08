@@ -14,7 +14,7 @@ export async function GET(req: Request) {
     response_types_supported: ["code"],
     grant_types_supported: ["authorization_code", "refresh_token"],
     token_endpoint_auth_methods_supported: ["client_secret_post", "client_secret_basic"],
-    code_challenge_methods_supported: ["plain", "S256"],
+    code_challenge_methods_supported: ["S256", "plain"],
   };
 
   return NextResponse.json(metadata, {

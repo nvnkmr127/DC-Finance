@@ -7,6 +7,7 @@ export async function POST(req: Request) {
   let clientSecret = "";
   let redirectUri = "";
   let refreshToken = "";
+  let codeVerifier = "";
 
   // Check HTTP Basic Auth header (e.g. Basic base64(client_id:client_secret))
   const authHeader = req.headers.get("authorization") || "";
@@ -31,6 +32,7 @@ export async function POST(req: Request) {
     if (!clientSecret) clientSecret = params.get("client_secret") || "";
     redirectUri = params.get("redirect_uri") || "";
     refreshToken = params.get("refresh_token") || "";
+    codeVerifier = params.get("code_verifier") || "";
   } else {
     try {
       const json = await req.json();
@@ -40,6 +42,7 @@ export async function POST(req: Request) {
       if (!clientSecret) clientSecret = json.client_secret || "";
       redirectUri = json.redirect_uri || "";
       refreshToken = json.refresh_token || "";
+      codeVerifier = json.code_verifier || "";
     } catch {
       // Empty or unparseable JSON
     }
@@ -59,6 +62,7 @@ export async function POST(req: Request) {
         clientId,
         clientSecret,
         redirectUri,
+        codeVerifier: codeVerifier || undefined,
       });
 
       return Response.json(tokens, {

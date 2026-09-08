@@ -29,6 +29,9 @@ function ConsentContent() {
   const state = searchParams.get("state") || "";
   const scope = searchParams.get("scope") || "finance:read webhooks:write";
 
+  const codeChallenge = searchParams.get("code_challenge") || "";
+  const codeChallengeMethod = searchParams.get("code_challenge_method") || "";
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [userEmail, setUserEmail] = useState<string | null>(null);
@@ -59,6 +62,8 @@ function ConsentContent() {
     target.searchParams.set("redirect_uri", redirectUri);
     target.searchParams.set("response_type", responseType);
     if (state) target.searchParams.set("state", state);
+    if (codeChallenge) target.searchParams.set("code_challenge", codeChallenge);
+    if (codeChallengeMethod) target.searchParams.set("code_challenge_method", codeChallengeMethod);
     target.searchParams.set("scope", scope);
     target.searchParams.set("consent", "approved");
 
