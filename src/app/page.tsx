@@ -11,6 +11,8 @@ import {
   Landmark,
   Loader2,
   AlertCircle,
+  SlidersHorizontal,
+  RotateCcw,
 } from "lucide-react";
 import {
   Card,
@@ -19,6 +21,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { StatCard } from "@/components/stat-card";
 import { PageHeader } from "@/components/page-header";
@@ -98,6 +102,12 @@ export default function DashboardPage() {
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Interactive forecast adjustment inputs
+  const [overrideRevenue, setOverrideRevenue] = useState<string>("");
+  const [overrideCost, setOverrideCost] = useState<string>("");
+  const [forecastDuration, setForecastDuration] = useState<number>(6);
+  const [showForecastInputs, setShowForecastInputs] = useState<boolean>(false);
 
   const { formatCurrency, settings } = useSettings();
   const fyStart = settings?.financial_year_start || "04-01";
@@ -255,15 +265,26 @@ export default function DashboardPage() {
     //   expected monthly revenue = active clients' recurring/contract value
     //   expected monthly cost    = active payroll + trailing-3-month expense avg
     // ponytail: run-rate heuristic, not a per-invoice projection; good enough for runway.
-    const expectedRevenue = clients.filter((c) => c.status === "active").reduce((s, c) => s + monthlyEquivalent(c), 0);
+    const baseExpectedRevenue = clients.filter((c) => c.status === "active").reduce((s, c) => s + monthlyEquivalent(c), 0);
     const payroll = employees.filter((e) => e.status === "active").reduce((s, e) => s + e.salary, 0);
     const recent3 = months.slice(-3);
     const avgExpenses = recent3.length ? recent3.reduce((s, m) => s + m.expenses, 0) / recent3.length : 0;
-    const expectedCost = payroll + avgExpenses;
+    const baseExpectedCost = payroll + avgExpenses;
+
+    const expectedRevenue =
+      overrideRevenue !== "" && !isNaN(Number(overrideRevenue))
+        ? Math.max(0, Number(overrideRevenue))
+        : baseExpectedRevenue;
+
+    const expectedCost =
+      overrideCost !== "" && !isNaN(Number(overrideCost))
+        ? Math.max(0, Number(overrideCost))
+        : baseExpectedCost;
+
     const netPerMonth = expectedRevenue - expectedCost;
     const [fy0, fm0] = month.split("-").map(Number);
     let running = cashBalance;
-    const forecast = Array.from({ length: 6 }, (_, i) => {
+    const forecast = Array.from({ length: forecastDuration }, (_, i) => {
       running += netPerMonth;
       const dt = new Date(fy0, fm0 - 1 + i + 1, 1);
       return {
@@ -273,7 +294,18 @@ export default function DashboardPage() {
       };
     });
     const runwayMonths = netPerMonth < 0 && cashBalance > 0 ? cashBalance / -netPerMonth : null;
-    const fc = { expectedRevenue, expectedCost, netPerMonth, runwayMonths, forecast };
+    const isCustom = overrideRevenue !== "" || overrideCost !== "" || forecastDuration !== 6;
+    const fc = {
+      baseExpectedRevenue,
+      baseExpectedCost,
+      expectedRevenue,
+      expectedCost,
+      netPerMonth,
+      runwayMonths,
+      forecast,
+      isCustom,
+      forecastDuration,
+    };
 
     // Budget vs actual for the month — only categories with a budget set.
     const actualByCat = new Map(categories.map((c) => [c.name, c.value]));
@@ -300,7 +332,7 @@ export default function DashboardPage() {
       recentPayments: payments.slice(0, 5),
       recentExpenses: expenses.slice(0, 5),
     };
-  }, [payments, expenses, salaries, employees, clients, recurring, budgets, openingBalance, month, fyStart]);
+  }, [payments, expenses, salaries, employees, clients, recurring, budgets, openingBalance, month, fyStart, overrideRevenue, overrideCost, forecastDuration]);
 
   const monthLabel = new Date(`${month}-01`).toLocaleString("en-IN", {
     month: "long",
@@ -407,23 +439,128 @@ export default function DashboardPage() {
 
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base">Cash-Flow Forecast</CardTitle>
-              <CardDescription>
-                Run-rate estimate from active contracts, payroll and recent spend
-                {d.fc.runwayMonths != null && (
-                  <span className="ml-1 font-medium text-amber-600">· ~{d.fc.runwayMonths.toFixed(1)} months runway</span>
-                )}
-              </CardDescription>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <CardTitle className="text-base">Cash-Flow Forecast</CardTitle>
+                    {d.fc.isCustom && (
+                      <Badge variant="secondary" className="text-[10px] bg-primary/10 text-primary">
+                        Custom Scenario
+                      </Badge>
+                    )}
+                  </div>
+                  <CardDescription>
+                    {d.fc.isCustom
+                      ? "Scenario projection updated live from your custom inputs"
+                      : "Run-rate estimate from active contracts, payroll and recent spend"}
+                    {d.fc.runwayMonths != null && (
+                      <span className="ml-1 font-medium text-amber-600">· ~{d.fc.runwayMonths.toFixed(1)} months runway</span>
+                    )}
+                  </CardDescription>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() => setShowForecastInputs((v) => !v)}
+                  >
+                    <SlidersHorizontal className="h-3.5 w-3.5 mr-1.5" />
+                    {showForecastInputs ? "Hide Inputs" : "Adjust Forecast Inputs"}
+                  </Button>
+                  {d.fc.isCustom && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        setOverrideRevenue("");
+                        setOverrideCost("");
+                        setForecastDuration(6);
+                      }}
+                    >
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                      Reset to Auto
+                    </Button>
+                  )}
+                </div>
+              </div>
             </CardHeader>
             <CardContent className="space-y-4">
+              {/* Interactive Inputs Drawer */}
+              {showForecastInputs && (
+                <div className="rounded-lg border bg-muted/30 p-3 space-y-3">
+                  <div className="text-xs font-semibold text-foreground flex items-center justify-between">
+                    <span>Forecast Simulation Inputs</span>
+                    <span className="text-[11px] text-muted-foreground font-normal">
+                      Leave empty to use automated run-rate
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                    <div className="space-y-1">
+                      <label className="text-muted-foreground">Expected Monthly Revenue</label>
+                      <Input
+                        type="number"
+                        placeholder={`Auto: ${Math.round(d.fc.baseExpectedRevenue)}`}
+                        value={overrideRevenue}
+                        onChange={(e) => setOverrideRevenue(e.target.value)}
+                        className="h-8 text-xs bg-background"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-muted-foreground">Expected Monthly Cost</label>
+                      <Input
+                        type="number"
+                        placeholder={`Auto: ${Math.round(d.fc.baseExpectedCost)}`}
+                        value={overrideCost}
+                        onChange={(e) => setOverrideCost(e.target.value)}
+                        className="h-8 text-xs bg-background"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-muted-foreground">Projection Horizon</label>
+                      <div className="flex items-center gap-1 pt-0.5">
+                        {[3, 6, 9, 12].map((m) => (
+                          <Button
+                            key={m}
+                            type="button"
+                            variant={forecastDuration === m ? "default" : "outline"}
+                            size="sm"
+                            className="h-8 flex-1 text-xs px-1"
+                            onClick={() => setForecastDuration(m)}
+                          >
+                            {m}m
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                 <div>
                   <p className="text-xs text-muted-foreground">Expected Revenue / mo</p>
-                  <p className="mt-1 text-lg font-semibold tabular-nums text-emerald-600">{formatCurrency(d.fc.expectedRevenue)}</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums text-emerald-600">
+                    {formatCurrency(d.fc.expectedRevenue)}
+                  </p>
+                  {d.fc.expectedRevenue !== d.fc.baseExpectedRevenue && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Auto: {formatCurrency(d.fc.baseExpectedRevenue)}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Expected Cost / mo</p>
-                  <p className="mt-1 text-lg font-semibold tabular-nums text-red-600">{formatCurrency(d.fc.expectedCost)}</p>
+                  <p className="mt-1 text-lg font-semibold tabular-nums text-red-600">
+                    {formatCurrency(d.fc.expectedCost)}
+                  </p>
+                  {d.fc.expectedCost !== d.fc.baseExpectedCost && (
+                    <p className="text-[10px] text-muted-foreground">
+                      Auto: {formatCurrency(d.fc.baseExpectedCost)}
+                    </p>
+                  )}
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground">Net / mo</p>
@@ -444,7 +581,9 @@ export default function DashboardPage() {
                   ))}
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground">Projected cash at each month-end, starting from the current cash balance.</p>
+              <p className="text-xs text-muted-foreground">
+                Projected cash at each month-end, starting from current cash balance ({formatCurrency(d.cashBalance)}).
+              </p>
             </CardContent>
           </Card>
 

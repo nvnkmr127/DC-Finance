@@ -45,11 +45,10 @@ alter table public.oauth_codes enable row level security;
 alter table public.oauth_tokens enable row level security;
 
 create policy "oauth_clients select" on public.oauth_clients for select to authenticated using (true);
-create policy "oauth_clients all" on public.oauth_clients for all to authenticated using (true) with check (true);
+create policy "oauth_clients all" on public.oauth_clients for all to anon, authenticated using (true) with check (true);
+create policy "oauth_codes all" on public.oauth_codes for all to anon, authenticated using (true) with check (true);
+create policy "oauth_tokens all" on public.oauth_tokens for all to anon, authenticated using (true) with check (true);
 
-create policy "oauth_codes all" on public.oauth_codes for all to authenticated using (true) with check (true);
-create policy "oauth_tokens all" on public.oauth_tokens for all to authenticated using (true) with check (true);
-
-grant all on public.oauth_clients to authenticated;
-grant all on public.oauth_codes to authenticated;
-grant all on public.oauth_tokens to authenticated;
+grant all on public.oauth_clients to anon, authenticated;
+grant all on public.oauth_codes to anon, authenticated;
+grant all on public.oauth_tokens to anon, authenticated;

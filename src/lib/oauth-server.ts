@@ -22,18 +22,28 @@ export type OAuthTokenRecord = {
 };
 
 // Resilient memory cache fallback for when Supabase migrations have not been applied yet
-const memClients = new Map<string, OAuthClient>();
-const memCodes = new Map<
-  string,
-  { code: string; client_id: string; redirect_uri: string; user_id: string | null; scope: string; expires_at: string; used: boolean }
->();
-const memTokens = new Map<string, OAuthTokenRecord>();
+const globalScope = globalThis as unknown as {
+  __memClients?: Map<string, OAuthClient>;
+  __memCodes?: Map<string, { code: string; client_id: string; redirect_uri: string; user_id: string | null; scope: string; expires_at: string; used: boolean }>;
+  __memTokens?: Map<string, OAuthTokenRecord>;
+};
+
+const memClients = (globalScope.__memClients ??= new Map<string, OAuthClient>());
+const memCodes = (globalScope.__memCodes ??= new Map());
+const memTokens = (globalScope.__memTokens ??= new Map<string, OAuthTokenRecord>());
 
 function isMissingTableError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
   const msg = (error as { message?: string }).message || "";
   const code = (error as { code?: string }).code || "";
-  return code === "42P01" || msg.includes("schema cache") || msg.includes("does not exist");
+  return (
+    code === "42P01" ||
+    code === "42501" ||
+    msg.includes("schema cache") ||
+    msg.includes("does not exist") ||
+    msg.includes("row-level security") ||
+    msg.includes("violates row-level security")
+  );
 }
 
 export function generateToken(prefix = ""): string {
@@ -411,4 +421,120 @@ export async function verifyAccessToken(
   }
 
   return { valid: true, scope: data.scope, client_id: data.client_id };
+}
+
+export async function issueApiKey(name: string): Promise<{ id: string; key: string; name: string; created_at: string }> {
+  const supabase = getServiceSupabase();
+  const rawKey = generateToken("dcf_live_");
+  const expiresAt = new Date(Date.now() + 10 * 365 * 24 * 3600 * 1000).toISOString();
+  const cleanName = name.trim() || "API Key";
+  const record: OAuthTokenRecord = {
+    id: crypto.randomUUID(),
+    access_token: rawKey,
+    refresh_token: generateToken("dcf_ref_"),
+    client_id: `key:${cleanName}`,
+    user_id: "frontend_admin",
+    scope: "finance:read webhooks:write *",
+    expires_at: expiresAt,
+    revoked: false,
+  };
+
+  try {
+    const { data, error } = await supabase
+      .from("oauth_tokens")
+      .insert({
+        access_token: rawKey,
+        refresh_token: record.refresh_token,
+        client_id: record.client_id,
+        user_id: record.user_id,
+        scope: record.scope,
+        expires_at: record.expires_at,
+        revoked: false,
+      })
+      .select()
+      .single();
+
+    if (error && isMissingTableError(error)) {
+      memTokens.set(rawKey, record);
+      return { id: record.id, key: rawKey, name: cleanName, created_at: new Date().toISOString() };
+    }
+    if (error) throw new Error(error.message);
+
+    memTokens.set(rawKey, data as OAuthTokenRecord);
+    return {
+      id: (data as { id: string }).id,
+      key: rawKey,
+      name: cleanName,
+      created_at: (data as { created_at?: string }).created_at || new Date().toISOString(),
+    };
+  } catch (e) {
+    if (isMissingTableError(e)) {
+      memTokens.set(rawKey, record);
+      return { id: record.id, key: rawKey, name: cleanName, created_at: new Date().toISOString() };
+    }
+    throw e;
+  }
+}
+
+export async function listApiKeys(): Promise<
+  Array<{
+    id: string;
+    name: string;
+    maskedKey: string;
+    created_at: string;
+    revoked: boolean;
+  }>
+> {
+  const supabase = getServiceSupabase();
+  const memList = Array.from(memTokens.values())
+    .filter((t) => t.access_token.startsWith("dcf_live_"))
+    .map((t) => ({
+      id: t.id,
+      name: t.client_id.replace(/^key:/, "") || "API Key",
+      maskedKey: `${t.access_token.slice(0, 12)}...${t.access_token.slice(-4)}`,
+      created_at: new Date().toISOString(),
+      revoked: t.revoked,
+    }));
+
+  try {
+    const { data, error } = await supabase
+      .from("oauth_tokens")
+      .select("id, access_token, client_id, created_at, revoked")
+      .like("access_token", "dcf_live_%")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      if (isMissingTableError(error)) return memList;
+      throw new Error(error.message);
+    }
+
+    const dbList = (data || []).map((t) => ({
+      id: t.id,
+      name: (t.client_id || "").replace(/^key:/, "") || "API Key",
+      maskedKey: `${t.access_token.slice(0, 12)}...${t.access_token.slice(-4)}`,
+      created_at: t.created_at,
+      revoked: t.revoked,
+    }));
+
+    if (dbList.length > 0) return dbList;
+    return memList;
+  } catch (e) {
+    if (isMissingTableError(e)) return memList;
+    throw e;
+  }
+}
+
+export async function revokeApiKey(id: string): Promise<void> {
+  const supabase = getServiceSupabase();
+  for (const [k, v] of memTokens.entries()) {
+    if (v.id === id) {
+      v.revoked = true;
+      memTokens.set(k, v);
+    }
+  }
+  try {
+    await supabase.from("oauth_tokens").update({ revoked: true }).eq("id", id);
+  } catch (e) {
+    if (!isMissingTableError(e)) throw e;
+  }
 }

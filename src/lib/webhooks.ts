@@ -65,13 +65,28 @@ export function generateWebhookSecret(): string {
   return `whsec_${random}`;
 }
 
+function isMissingTableError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const msg = (error as { message?: string }).message || "";
+  const code = (error as { code?: string }).code || "";
+  return code === "42P01" || msg.includes("schema cache") || msg.includes("does not exist");
+}
+
 export async function listWebhooks(): Promise<Webhook[]> {
-  const { data, error } = await getSupabase()
-    .from("webhooks")
-    .select("*")
-    .order("created_at", { ascending: false });
-  if (error) throw new Error(error.message);
-  return data as Webhook[];
+  try {
+    const { data, error } = await getSupabase()
+      .from("webhooks")
+      .select("*")
+      .order("created_at", { ascending: false });
+    if (error) {
+      if (isMissingTableError(error)) return [];
+      throw new Error(error.message);
+    }
+    return data as Webhook[];
+  } catch (e) {
+    if (isMissingTableError(e)) return [];
+    throw e;
+  }
 }
 
 export async function createWebhook(input: WebhookInput): Promise<Webhook> {
@@ -87,7 +102,12 @@ export async function createWebhook(input: WebhookInput): Promise<Webhook> {
     })
     .select()
     .single();
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (isMissingTableError(error)) {
+      throw new Error("Table 'webhooks' does not exist yet in Supabase. Please run the migration SQL in your Supabase SQL Editor.");
+    }
+    throw new Error(error.message);
+  }
   return data as Webhook;
 }
 
@@ -112,19 +132,27 @@ export async function listWebhookDeliveries(options?: {
   webhookId?: string;
   limit?: number;
 }): Promise<WebhookDelivery[]> {
-  let query = getSupabase()
-    .from("webhook_deliveries")
-    .select("*, webhooks(name)")
-    .order("delivered_at", { ascending: false })
-    .limit(options?.limit ?? 50);
+  try {
+    let query = getSupabase()
+      .from("webhook_deliveries")
+      .select("*, webhooks(name)")
+      .order("delivered_at", { ascending: false })
+      .limit(options?.limit ?? 50);
 
-  if (options?.webhookId) {
-    query = query.eq("webhook_id", options.webhookId);
+    if (options?.webhookId) {
+      query = query.eq("webhook_id", options.webhookId);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      if (isMissingTableError(error)) return [];
+      throw new Error(error.message);
+    }
+    return data as unknown as WebhookDelivery[];
+  } catch (e) {
+    if (isMissingTableError(e)) return [];
+    throw e;
   }
-
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
-  return data as unknown as WebhookDelivery[];
 }
 
 // Client-side dispatcher helper: fires in the background without blocking the UI

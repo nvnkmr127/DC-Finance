@@ -20,8 +20,12 @@ import {
   Shield,
   Activity,
   ArrowUpRight,
+  Bot,
+  Terminal,
+  Lock,
 } from "lucide-react";
 import { toast } from "sonner";
+import { ApiKeysManager } from "@/components/api-keys-manager";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -78,6 +82,20 @@ function formatDate(iso: string) {
     second: "2-digit",
   });
 }
+
+const MCP_CONFIG_JSON = JSON.stringify(
+  {
+    mcpServers: {
+      "dc-finance": {
+        command: "npx",
+        args: ["-y", "tsx", "scripts/mcp-server.ts"],
+        cwd: "/Users/naveenadicharla/Documents/DC Finance",
+      },
+    },
+  },
+  null,
+  2,
+);
 
 export default function WebhooksPage() {
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
@@ -362,6 +380,10 @@ export default function WebhooksPage() {
           <TabsTrigger value="deliveries" className="flex items-center gap-2">
             <Clock className="h-4 w-4" />
             Delivery Logs ({deliveries.length})
+          </TabsTrigger>
+          <TabsTrigger value="ai-mcp" className="flex items-center gap-2">
+            <Bot className="h-4 w-4" />
+            MCP & AI Connectors
           </TabsTrigger>
         </TabsList>
 
@@ -657,6 +679,164 @@ export default function WebhooksPage() {
                       );
                     })
                   )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* MCP & AI Connectors Tab */}
+        <TabsContent value="ai-mcp" className="space-y-6">
+          {/* Section 0: Frontend API Key Management */}
+          <ApiKeysManager />
+
+          {/* Section 1: Claude Desktop & Cursor (MCP Stdio) */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Terminal className="h-5 w-5 text-primary" />
+                  <CardTitle className="text-base font-semibold">Claude Desktop, Cursor & Antigravity (MCP Server)</CardTitle>
+                </div>
+                <Badge variant="outline" className="text-xs font-mono">
+                  stdio JSON-RPC
+                </Badge>
+              </div>
+              <CardDescription className="text-xs">
+                Connect external AI coding assistants directly to your DC Finance system over Model Context Protocol (MCP).
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3 text-xs">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold text-foreground">Configuration snippet (claude_desktop_config.json / settings.json):</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => copyToClipboard(MCP_CONFIG_JSON, "MCP Config")}
+                >
+                  <Copy className="h-3 w-3 mr-1" /> Copy Config JSON
+                </Button>
+              </div>
+
+              <pre className="rounded-lg bg-muted p-3 font-mono text-[11px] overflow-x-auto">
+                {MCP_CONFIG_JSON}
+              </pre>
+
+              <div className="text-muted-foreground space-y-1">
+                <p>• <strong>Claude Desktop</strong>: Paste into <code>~/Library/Application Support/Claude/claude_desktop_config.json</code> and restart Claude.</p>
+                <p>• <strong>Cursor</strong>: Add under Cursor Settings → Features → MCP → Add New MCP Server.</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Section 2: ChatGPT & Custom GPTs */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Bot className="h-5 w-5 text-emerald-500" />
+                  <CardTitle className="text-base font-semibold">ChatGPT & Custom GPT Actions</CardTitle>
+                </div>
+                <Badge variant="outline" className="text-xs font-mono">
+                  OpenAPI 3.1.0
+                </Badge>
+              </div>
+              <CardDescription className="text-xs">
+                Import DC Finance into ChatGPT Custom GPT Actions to ask questions and control webhooks through ChatGPT.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 text-xs">
+              <div className="space-y-2">
+                <Label className="text-xs font-medium">OpenAPI Specification URL</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value={`${typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/api/openapi.json`}
+                    className="font-mono text-xs"
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 shrink-0 text-xs"
+                    onClick={() =>
+                      copyToClipboard(
+                        `${window.location.origin}/api/openapi.json`,
+                        "OpenAPI URL",
+                      )
+                    }
+                  >
+                    <Copy className="h-3 w-3 mr-1" /> Copy URL
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  In ChatGPT: <strong>Explore GPTs</strong> → <strong>Create a GPT</strong> → <strong>Configure</strong> → <strong>Actions</strong> → <strong>Import from URL</strong>.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <div className="rounded-lg border p-3 space-y-1 bg-muted/20">
+                  <div className="font-semibold text-foreground flex items-center gap-1.5">
+                    <Shield className="h-3.5 w-3.5 text-primary" />
+                    Option A: API Key Auth (Simple)
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Select <strong>API Key</strong> → <strong>Bearer</strong> in ChatGPT Actions, and paste any API key generated in the section above (or your <code>DC_FINANCE_API_KEY</code>).
+                  </div>
+                </div>
+
+                <div className="rounded-lg border p-3 space-y-1 bg-muted/20">
+                  <div className="font-semibold text-foreground flex items-center gap-1.5">
+                    <Lock className="h-3.5 w-3.5 text-emerald-500" />
+                    Option B: OAuth 2.0 (Interactive)
+                  </div>
+                  <div className="text-[11px] text-muted-foreground">
+                    Select <strong>OAuth</strong> with Authorization URL <code>/api/oauth/authorize</code> and Token URL <code>/api/oauth/token</code> for consent-based access.
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Section 3: Registered Tools Reference */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">Available AI & MCP Tools</CardTitle>
+              <CardDescription className="text-xs">
+                All external AI connections have access to the following 9 tools:
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[200px]">Tool Name</TableHead>
+                    <TableHead>Description</TableHead>
+                    <TableHead className="w-[120px]">Scope</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="text-xs">
+                  {[
+                    { name: "list_webhooks", desc: "List all configured webhook subscriptions", scope: "webhooks:write" },
+                    { name: "create_webhook", desc: "Create a new outbound webhook endpoint", scope: "webhooks:write" },
+                    { name: "test_webhook", desc: "Send test.ping to verify an endpoint and signature", scope: "webhooks:write" },
+                    { name: "list_webhook_deliveries", desc: "Inspect recent delivery logs, status codes, and latency", scope: "webhooks:write" },
+                    { name: "dispatch_webhook_event", desc: "Manually fire custom events to active endpoints", scope: "webhooks:write" },
+                    { name: "list_invoices", desc: "View invoices, payment status, and outstanding balances", scope: "finance:read" },
+                    { name: "list_payments", desc: "View recent client payment transactions", scope: "finance:read" },
+                    { name: "list_expenses", desc: "View categorized business expenses", scope: "finance:read" },
+                    { name: "list_clients", desc: "View clients and monthly contract values", scope: "finance:read" },
+                  ].map((tool) => (
+                    <TableRow key={tool.name}>
+                      <TableCell className="font-mono font-medium text-foreground">{tool.name}</TableCell>
+                      <TableCell className="text-muted-foreground">{tool.desc}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className="text-[10px] font-mono">
+                          {tool.scope}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
                 </TableBody>
               </Table>
             </CardContent>

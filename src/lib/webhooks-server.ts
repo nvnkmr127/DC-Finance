@@ -83,18 +83,22 @@ export async function executeWebhookDelivery(
 
   const executionTimeMs = Date.now() - startTime;
 
-  // Record delivery entry in database
-  await supabase.from("webhook_deliveries").insert({
-    webhook_id: webhook.id,
-    event,
-    url: webhook.url,
-    payload: fullPayload,
-    status_code: statusCode,
-    response_body: responseBody,
-    execution_time_ms: executionTimeMs,
-    success,
-    error: errorMsg,
-  });
+  // Record delivery entry in database (non-blocking if table not yet migrated)
+  try {
+    await supabase.from("webhook_deliveries").insert({
+      webhook_id: webhook.id,
+      event,
+      url: webhook.url,
+      payload: fullPayload,
+      status_code: statusCode,
+      response_body: responseBody,
+      execution_time_ms: executionTimeMs,
+      success,
+      error: errorMsg,
+    });
+  } catch (err) {
+    console.warn("Could not record delivery log (run migrations in Supabase SQL editor):", err);
+  }
 
   return {
     webhook_id: webhook.id,

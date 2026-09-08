@@ -13,8 +13,8 @@ export async function getAuthError(req: Request, requiredScope?: string): Promis
     return null;
   }
 
-  // 2. OAuth 2.0 Access Token check
-  if (token && token.startsWith("atk_")) {
+  // 2. Database API Key (dcf_live_) & OAuth 2.0 Access Token (atk_) check
+  if (token && (token.startsWith("atk_") || token.startsWith("dcf_"))) {
     const verification = await verifyAccessToken(token, requiredScope);
     if (verification.valid) {
       return null;

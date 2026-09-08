@@ -14,6 +14,7 @@ import { exportAllData } from "@/lib/backup";
 import { listServices, createService, updateService, deleteService, type Service } from "@/lib/services";
 import { unitSuffix } from "@/lib/format";
 import { useSettings } from "@/components/settings-provider";
+import { ApiKeysManager } from "@/components/api-keys-manager";
 
 export default function SettingsPage() {
   const { settings, loading, refreshSettings, formatCurrency } = useSettings();
@@ -563,6 +564,10 @@ export default function SettingsPage() {
             </div>
           </CardContent>
         </Card>
+
+        <div className="md:col-span-2">
+          <ApiKeysManager />
+        </div>
 
         <Card className="md:col-span-2">
           <CardHeader>
