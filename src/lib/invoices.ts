@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { getSupabase } from "@/lib/supabase/client";
 import type { BillingCycle } from "@/lib/clients";
+import { dispatchWebhookEvent } from "@/lib/webhooks";
 
 // ---- Validation ----------------------------------------------------------
 
@@ -131,6 +132,17 @@ export async function createInvoice(input: InvoiceInput): Promise<void> {
   }));
   const { error: itemsError } = await supabase.from("invoice_items").insert(items);
   if (itemsError) throw new Error(itemsError.message);
+
+  dispatchWebhookEvent("invoice.created", {
+    id: data.id,
+    invoice_number,
+    client_id: input.client_id,
+    issue_date: input.issue_date,
+    due_date: input.due_date,
+    status: input.status,
+    total,
+    items,
+  });
 }
 
 // Draft invoices from client billing cycles for a given month (YYYY-MM).
@@ -207,11 +219,22 @@ export async function updateInvoice(id: string, input: InvoiceInput): Promise<vo
   }));
   const { error: itemsError } = await supabase.from("invoice_items").insert(items);
   if (itemsError) throw new Error(itemsError.message);
+
+  dispatchWebhookEvent("invoice.updated", {
+    id,
+    client_id: input.client_id,
+    issue_date: input.issue_date,
+    due_date: input.due_date,
+    status: input.status,
+    total,
+    items,
+  });
 }
 
 export async function deleteInvoice(id: string): Promise<void> {
   const { error } = await getSupabase().from("invoices").delete().eq("id", id);
   if (error) throw new Error(error.message);
+  dispatchWebhookEvent("invoice.deleted", { id });
 }
 
 // Record that a reminder was sent now (collections). Returns the timestamp.

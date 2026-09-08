@@ -15,6 +15,7 @@ import {
   ScrollText,
   BarChart3,
   Settings,
+  Webhook,
   type LucideIcon,
 } from "lucide-react";
 
@@ -33,6 +34,7 @@ const ICONS: [string, LucideIcon][] = [
   ["/statements", ScrollText],
   ["/reports", BarChart3],
   ["/audit", ScrollText],
+  ["/webhooks", Webhook],
   ["/settings", Settings],
 ];
 

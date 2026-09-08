@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getSupabase } from "@/lib/supabase/client";
+import { dispatchWebhookEvent } from "@/lib/webhooks";
 
 export const expenseSchema = z.object({
   category: z.string().min(1, "Category is required"),
@@ -40,16 +41,21 @@ export async function listExpenses(ownerId?: string): Promise<Expense[]> {
 }
 
 export async function createExpense(input: ExpenseInput): Promise<void> {
-  const { error } = await getSupabase().from("expenses").insert(normalize(input));
+  const payload = normalize(input);
+  const { data, error } = await getSupabase().from("expenses").insert(payload).select().single();
   if (error) throw new Error(error.message);
+  dispatchWebhookEvent("expense.created", (data as Record<string, unknown>) ?? payload);
 }
 
 export async function updateExpense(id: string, input: ExpenseInput): Promise<void> {
-  const { error } = await getSupabase().from("expenses").update(normalize(input)).eq("id", id);
+  const payload = normalize(input);
+  const { data, error } = await getSupabase().from("expenses").update(payload).eq("id", id).select().single();
   if (error) throw new Error(error.message);
+  dispatchWebhookEvent("expense.updated", (data as Record<string, unknown>) ?? { id, ...payload });
 }
 
 export async function deleteExpense(id: string): Promise<void> {
   const { error } = await getSupabase().from("expenses").delete().eq("id", id);
   if (error) throw new Error(error.message);
+  dispatchWebhookEvent("expense.deleted", { id });
 }

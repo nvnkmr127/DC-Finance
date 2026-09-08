@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getSupabase } from "@/lib/supabase/client";
+import { dispatchWebhookEvent } from "@/lib/webhooks";
 
 export const paymentSchema = z.object({
   client_id: z.string().min(1, "Select a client"),
@@ -51,15 +52,36 @@ export async function listPayments(): Promise<PaymentWithClient[]> {
 }
 
 export async function createPayment(input: PaymentInput): Promise<void> {
-  const { error } = await getSupabase().from("payments").insert(normalize(input));
+  const payload = normalize(input);
+  const { data, error } = await getSupabase().from("payments").insert(payload).select().single();
   if (error) throw new Error(error.message);
+  dispatchWebhookEvent("payment.created", (data as Record<string, unknown>) ?? payload);
+
+  if (payload.invoice_id) {
+    try {
+      const { data: inv } = await getSupabase()
+        .from("invoice_summary")
+        .select("id, balance, display_status")
+        .eq("id", payload.invoice_id)
+        .single();
+      if (inv && inv.display_status === "paid") {
+        dispatchWebhookEvent("invoice.paid", { invoice_id: inv.id, payment_id: data?.id });
+      }
+    } catch {
+      // Non-critical background lookup
+    }
+  }
 }
 
 // Insert several payment rows at once (e.g. a quarterly lump split into 3 months).
 export async function createPayments(inputs: PaymentInput[]): Promise<void> {
   if (!inputs.length) return;
-  const { error } = await getSupabase().from("payments").insert(inputs.map(normalize));
+  const payloads = inputs.map(normalize);
+  const { data, error } = await getSupabase().from("payments").insert(payloads).select();
   if (error) throw new Error(error.message);
+  for (const item of (data as Record<string, unknown>[]) ?? payloads) {
+    dispatchWebhookEvent("payment.created", item);
+  }
 }
 
 // "2025-07" + 2 → "2025-09"
@@ -83,11 +105,14 @@ export function splitQuarterly(input: PaymentInput): PaymentInput[] {
 }
 
 export async function updatePayment(id: string, input: PaymentInput): Promise<void> {
-  const { error } = await getSupabase().from("payments").update(normalize(input)).eq("id", id);
+  const payload = normalize(input);
+  const { data, error } = await getSupabase().from("payments").update(payload).eq("id", id).select().single();
   if (error) throw new Error(error.message);
+  dispatchWebhookEvent("payment.updated", (data as Record<string, unknown>) ?? { id, ...payload });
 }
 
 export async function deletePayment(id: string): Promise<void> {
   const { error } = await getSupabase().from("payments").delete().eq("id", id);
   if (error) throw new Error(error.message);
+  dispatchWebhookEvent("payment.deleted", { id });
 }

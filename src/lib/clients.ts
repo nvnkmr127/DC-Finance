@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { getSupabase } from "@/lib/supabase/client";
+import { dispatchWebhookEvent } from "@/lib/webhooks";
 
 // ---- Validation ----------------------------------------------------------
 
@@ -219,6 +220,7 @@ export async function createClient(input: ClientInput): Promise<void> {
       localStorage.setItem(`dc_client_pricing_${data.id}`, JSON.stringify([initialRev]));
     } catch {}
   }
+  dispatchWebhookEvent("client.created", (data as Record<string, unknown>) ?? input);
 }
 
 export async function updateClient(id: string, input: ClientInput): Promise<void> {
@@ -228,7 +230,7 @@ export async function updateClient(id: string, input: ClientInput): Promise<void
     oldClient = await getClientSummary(id);
   } catch {}
 
-  const { error } = await getSupabase().from("clients").update(input).eq("id", id);
+  const { data, error } = await getSupabase().from("clients").update(input).eq("id", id).select().single();
   if (error) throw new Error(error.message);
 
   // If price or service changed, log to local cache
@@ -259,9 +261,11 @@ export async function updateClient(id: string, input: ClientInput): Promise<void
       } catch {}
     }
   }
+  dispatchWebhookEvent("client.updated", (data as Record<string, unknown>) ?? { id, ...input });
 }
 
 export async function deleteClient(id: string): Promise<void> {
   const { error } = await getSupabase().from("clients").delete().eq("id", id);
   if (error) throw new Error(error.message);
+  dispatchWebhookEvent("client.deleted", { id });
 }
