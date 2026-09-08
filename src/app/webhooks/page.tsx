@@ -778,20 +778,26 @@ export default function WebhooksPage() {
                 <div className="rounded-lg border p-3 space-y-1 bg-muted/20">
                   <div className="font-semibold text-foreground flex items-center gap-1.5">
                     <Shield className="h-3.5 w-3.5 text-primary" />
-                    Option A: API Key Auth (Simple)
+                    Option A: API Key Auth (Recommended — No sign-in errors)
                   </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    Select <strong>API Key</strong> → <strong>Bearer</strong> in ChatGPT Actions, and paste any API key generated in the section above (or your <code>DC_FINANCE_API_KEY</code>).
+                  <div className="text-[11px] text-muted-foreground space-y-1">
+                    <p>In ChatGPT Actions → Authentication: choose <strong>API Key</strong> → <strong>Bearer</strong>, and paste any API key generated above.</p>
                   </div>
                 </div>
 
-                <div className="rounded-lg border p-3 space-y-1 bg-muted/20">
+                <div className="rounded-lg border p-3 space-y-2 bg-muted/20">
                   <div className="font-semibold text-foreground flex items-center gap-1.5">
                     <Lock className="h-3.5 w-3.5 text-emerald-500" />
-                    Option B: OAuth 2.0 (Interactive)
+                    Option B: OAuth 2.0 Credentials (If requested by connector)
                   </div>
-                  <div className="text-[11px] text-muted-foreground">
-                    Select <strong>OAuth</strong> with Authorization URL <code>/api/oauth/authorize</code> and Token URL <code>/api/oauth/token</code> for consent-based access.
+                  <div className="text-[11px] text-muted-foreground space-y-1">
+                    <p>If ChatGPT asks to <em>“add an OAuth Client ID in connector settings”</em>:</p>
+                    <div className="space-y-1 font-mono text-[10px] bg-background/80 p-2 rounded border border-border">
+                      <p><strong>Client ID:</strong> dcfinance-chatgpt</p>
+                      <p><strong>Client Secret:</strong> dcf_secret_chatgpt</p>
+                      <p><strong>Auth URL:</strong> {typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/api/oauth/authorize</p>
+                      <p><strong>Token URL:</strong> {typeof window !== "undefined" ? window.location.origin : "http://localhost:3000"}/api/oauth/token</p>
+                    </div>
                   </div>
                 </div>
               </div>

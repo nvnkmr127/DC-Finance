@@ -239,11 +239,11 @@ export async function GET(req: Request) {
         BearerAuth: {
           type: "http",
           scheme: "bearer",
-          description: "Enter your static DC_FINANCE_API_KEY",
+          description: "Enter your generated API Key (dcf_live_...) or DC_FINANCE_API_KEY",
         },
         OAuth2: {
           type: "oauth2",
-          description: "Standard OAuth 2.0 Authorization Code flow for ChatGPT Actions",
+          description: "OAuth 2.0 Authorization Code flow for interactive consent",
           flows: {
             authorizationCode: {
               authorizationUrl: `${serverUrl}/api/oauth/authorize`,
@@ -257,7 +257,7 @@ export async function GET(req: Request) {
         },
       },
     },
-    security: [{ OAuth2: ["finance:read", "webhooks:write"] }, { BearerAuth: [] }],
+    security: [{ BearerAuth: [] }, { OAuth2: ["finance:read", "webhooks:write"] }],
   };
 
   return Response.json(spec, {

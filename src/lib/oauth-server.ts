@@ -50,7 +50,24 @@ export function generateToken(prefix = ""): string {
   return `${prefix}${crypto.randomBytes(32).toString("hex")}`;
 }
 
+export const DEFAULT_OAUTH_CLIENT_ID = "dcfinance-chatgpt";
+export const DEFAULT_OAUTH_CLIENT_SECRET = "dcf_secret_chatgpt";
+
 export async function getClient(clientId: string): Promise<OAuthClient | null> {
+  if (clientId === DEFAULT_OAUTH_CLIENT_ID) {
+    return {
+      id: "default-chatgpt-client",
+      client_id: DEFAULT_OAUTH_CLIENT_ID,
+      client_secret: process.env.DC_FINANCE_API_KEY || DEFAULT_OAUTH_CLIENT_SECRET,
+      name: "ChatGPT Connector",
+      redirect_uris: [
+        "https://chat.openai.com/aip/plugin-oauth/callback",
+        "https://chatgpt.com/aip/plugin-oauth/callback",
+      ],
+      created_at: new Date().toISOString(),
+    };
+  }
+
   const supabase = getServiceSupabase();
   try {
     const { data, error } = await supabase
