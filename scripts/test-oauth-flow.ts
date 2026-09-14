@@ -107,7 +107,62 @@ async function testOAuthFlow() {
     oldRefreshFailed = true;
   }
   assert(oldRefreshFailed, "Revoked refresh token should be rejected");
-  console.log("✓ Revocation protection verified");
+  // 9. Verify PKCE verification
+  const crypto = await import("node:crypto");
+  const codeVerifier = "test-verifier-abcdefghijklmnopqrstuvwxyz-123456789";
+  const codeChallenge = crypto.createHash("sha256").update(codeVerifier).digest("base64url");
+
+  const pkceCode = await createAuthorizationCode({
+    clientId: testClientId,
+    redirectUri,
+    codeChallenge,
+    codeChallengeMethod: "S256",
+  });
+
+  // Failing PKCE exchange with wrong verifier
+  let badVerifierFailed = false;
+  try {
+    await exchangeCodeForTokens({
+      code: pkceCode,
+      clientId: testClientId,
+      clientSecret: testClientSecret,
+      redirectUri,
+      codeVerifier: "wrong-verifier",
+    });
+  } catch {
+    badVerifierFailed = true;
+  }
+  assert(badVerifierFailed, "Invalid code_verifier must be rejected");
+
+  // Successful PKCE exchange with correct verifier
+  const pkceTokens = await exchangeCodeForTokens({
+    code: pkceCode,
+    clientId: testClientId,
+    clientSecret: testClientSecret,
+    redirectUri,
+    codeVerifier,
+  });
+  assert(pkceTokens.access_token.startsWith("atk_"), "PKCE exchange must succeed with correct verifier");
+  console.log("✓ PKCE S256 verification passed");
+
+  // 10. Verify redirect URI mismatch protection
+  const redirectCode = await createAuthorizationCode({
+    clientId: testClientId,
+    redirectUri,
+  });
+  let redirectMismatchFailed = false;
+  try {
+    await exchangeCodeForTokens({
+      code: redirectCode,
+      clientId: testClientId,
+      clientSecret: testClientSecret,
+      redirectUri: "https://evil.com/callback",
+    });
+  } catch {
+    redirectMismatchFailed = true;
+  }
+  assert(redirectMismatchFailed, "Mismatched redirect_uri must be rejected");
+  console.log("✓ Redirect URI mismatch rejection verified");
 
   console.log("\n All OAuth 2.0 Authorization Server checks passed successfully!");
 }

@@ -11,16 +11,21 @@ create table if not exists public.oauth_clients (
 );
 
 create table if not exists public.oauth_codes (
-  id           uuid primary key default gen_random_uuid(),
-  code         text not null unique,
-  client_id    text not null,
-  redirect_uri text not null,
-  user_id      text,
-  scope        text not null default 'finance:read webhooks:write',
-  expires_at   timestamptz not null,
-  used         boolean not null default false,
-  created_at   timestamptz not null default now()
+  id                    uuid primary key default gen_random_uuid(),
+  code                  text not null unique,
+  client_id             text not null,
+  redirect_uri          text not null,
+  user_id               text,
+  scope                 text not null default 'finance:read webhooks:write',
+  code_challenge        text,
+  code_challenge_method text,
+  expires_at            timestamptz not null,
+  used                  boolean not null default false,
+  created_at            timestamptz not null default now()
 );
+
+alter table public.oauth_codes add column if not exists code_challenge text;
+alter table public.oauth_codes add column if not exists code_challenge_method text;
 
 create table if not exists public.oauth_tokens (
   id            uuid primary key default gen_random_uuid(),

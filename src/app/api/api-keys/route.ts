@@ -1,7 +1,44 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { issueApiKey, listApiKeys, revokeApiKey } from "@/lib/oauth-server";
 
-export async function GET() {
+async function verifyUser(req: Request): Promise<Response | null> {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anonKey =
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ??
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+
+  if (!url || !anonKey) {
+    if (process.env.NODE_ENV === "production") {
+      return NextResponse.json({ error: "Supabase is not configured." }, { status: 500 });
+    }
+    return null;
+  }
+
+  const token = (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim();
+  if (!token) {
+    if (process.env.NODE_ENV === "production") {
+      return NextResponse.json({ error: "Authentication required." }, { status: 401 });
+    }
+    return null;
+  }
+
+  const supabase = createClient(url, anonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+
+  const { data, error } = await supabase.auth.getUser();
+  if (error || !data?.user) {
+    return NextResponse.json({ error: "Invalid session." }, { status: 401 });
+  }
+
+  return null;
+}
+
+export async function GET(req: Request) {
+  const authErr = await verifyUser(req);
+  if (authErr) return authErr;
+
   try {
     const keys = await listApiKeys();
     return NextResponse.json({ keys });
@@ -14,6 +51,9 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const authErr = await verifyUser(req);
+  if (authErr) return authErr;
+
   try {
     const body = await req.json().catch(() => ({}));
     const name = typeof body.name === "string" ? body.name : "Frontend API Key";
@@ -28,6 +68,9 @@ export async function POST(req: Request) {
 }
 
 export async function DELETE(req: Request) {
+  const authErr = await verifyUser(req);
+  if (authErr) return authErr;
+
   try {
     const { searchParams } = new URL(req.url);
     const id = searchParams.get("id");

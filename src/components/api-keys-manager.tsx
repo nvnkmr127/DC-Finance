@@ -24,6 +24,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { getSupabase } from "@/lib/supabase/client";
 
 interface ApiKeyItem {
   id: string;
@@ -31,6 +32,16 @@ interface ApiKeyItem {
   maskedKey: string;
   created_at: string;
   revoked: boolean;
+}
+
+async function getAuthHeaders(): Promise<Record<string, string>> {
+  try {
+    const { data } = await getSupabase().auth.getSession();
+    const token = data.session?.access_token;
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  } catch {
+    return {};
+  }
 }
 
 export function ApiKeysManager() {
@@ -46,7 +57,8 @@ export function ApiKeysManager() {
   const loadKeys = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/api-keys");
+      const authHeaders = await getAuthHeaders();
+      const res = await fetch("/api/api-keys", { headers: authHeaders });
       if (!res.ok) throw new Error("Failed to fetch keys");
       const data = await res.json();
       setKeys(data.keys || []);
@@ -65,9 +77,10 @@ export function ApiKeysManager() {
     e.preventDefault();
     try {
       setGenerating(true);
+      const authHeaders = await getAuthHeaders();
       const res = await fetch("/api/api-keys", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders },
         body: JSON.stringify({ name: keyName || "API Key" }),
       });
       if (!res.ok) {
@@ -92,8 +105,10 @@ export function ApiKeysManager() {
     }
     try {
       setRevokingId(id);
+      const authHeaders = await getAuthHeaders();
       const res = await fetch(`/api/api-keys?id=${encodeURIComponent(id)}`, {
         method: "DELETE",
+        headers: authHeaders,
       });
       if (!res.ok) throw new Error("Failed to revoke key");
       toast.success("API key revoked");

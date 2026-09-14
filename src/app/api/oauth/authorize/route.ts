@@ -32,24 +32,14 @@ export async function GET(req: Request) {
     return Response.redirect(consentUrl.toString(), 302);
   }
 
-  // Lookup client or auto-register standard ChatGPT client
-  let client = await getClient(clientId);
+  // Verify registered client and redirect URI
+  const client = await getClient(clientId);
   if (!client) {
-    // If it's a new external client or ChatGPT, auto-register client credentials
-    const defaultSecret = process.env.DC_FINANCE_API_KEY || "sec_chatgpt_default";
-    client = await registerClient({
-      name: "ChatGPT Action Client",
-      clientId,
-      clientSecret: defaultSecret,
-      redirectUris: [redirectUri],
-    });
-  } else if (!client.redirect_uris.includes(redirectUri)) {
-    // Append redirect URI if not listed
-    const supabase = (await import("@/lib/gpt-auth")).getServiceSupabase();
-    await supabase
-      .from("oauth_clients")
-      .update({ redirect_uris: [...client.redirect_uris, redirectUri] })
-      .eq("id", client.id);
+    return new Response("invalid_client: Client ID not found. Register client credentials first.", { status: 400 });
+  }
+
+  if (!client.redirect_uris.includes(redirectUri)) {
+    return new Response("invalid_request: redirect_uri is not registered for this client", { status: 400 });
   }
 
   // Create single-use authorization code

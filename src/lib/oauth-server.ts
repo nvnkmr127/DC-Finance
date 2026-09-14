@@ -21,16 +21,36 @@ export type OAuthTokenRecord = {
   revoked: boolean;
 };
 
+export type OAuthCodeRecord = {
+  id?: string;
+  code: string;
+  client_id: string;
+  redirect_uri: string;
+  user_id: string | null;
+  scope: string;
+  code_challenge?: string | null;
+  code_challenge_method?: string | null;
+  expires_at: string;
+  used: boolean;
+};
+
 // Resilient memory cache fallback for when Supabase migrations have not been applied yet
 const globalScope = globalThis as unknown as {
   __memClients?: Map<string, OAuthClient>;
-  __memCodes?: Map<string, { code: string; client_id: string; redirect_uri: string; user_id: string | null; scope: string; expires_at: string; used: boolean }>;
+  __memCodes?: Map<string, OAuthCodeRecord>;
   __memTokens?: Map<string, OAuthTokenRecord>;
 };
 
 const memClients = (globalScope.__memClients ??= new Map<string, OAuthClient>());
-const memCodes = (globalScope.__memCodes ??= new Map());
+const memCodes = (globalScope.__memCodes ??= new Map<string, OAuthCodeRecord>());
 const memTokens = (globalScope.__memTokens ??= new Map<string, OAuthTokenRecord>());
+
+function safeCompare(a: string, b: string): boolean {
+  const bufA = Buffer.from(a);
+  const bufB = Buffer.from(b);
+  if (bufA.length !== bufB.length) return false;
+  return crypto.timingSafeEqual(bufA, bufB);
+}
 
 function isMissingTableError(error: unknown): boolean {
   if (!error || typeof error !== "object") return false;
@@ -39,8 +59,8 @@ function isMissingTableError(error: unknown): boolean {
   return (
     code === "42P01" ||
     code === "42501" ||
-    msg.includes("schema cache") ||
     msg.includes("does not exist") ||
+    msg.includes("schema cache") ||
     msg.includes("row-level security") ||
     msg.includes("violates row-level security")
   );
@@ -76,8 +96,9 @@ export async function getClient(clientId: string): Promise<OAuthClient | null> {
       .eq("client_id", clientId)
       .maybeSingle();
 
-    if (error && isMissingTableError(error)) {
-      return memClients.get(clientId) || null;
+    if (error) {
+      if (isMissingTableError(error)) return memClients.get(clientId) || null;
+      throw new Error(error.message);
     }
     return (data as OAuthClient) || memClients.get(clientId) || null;
   } catch (e) {
@@ -124,7 +145,9 @@ export async function registerClient(params: {
       }
       throw new Error(error.message);
     }
-    return data as OAuthClient;
+    const client = data as OAuthClient;
+    memClients.set(clientId, client);
+    return client;
   } catch (e) {
     if (isMissingTableError(e)) {
       memClients.set(clientId, record);
@@ -146,7 +169,7 @@ export async function createAuthorizationCode(params: {
   const code = generateToken("code_");
   const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 mins
 
-  const codeData = {
+  const codeData: OAuthCodeRecord = {
     code,
     client_id: params.clientId,
     redirect_uri: params.redirectUri,
@@ -167,6 +190,7 @@ export async function createAuthorizationCode(params: {
       }
       throw new Error(error.message);
     }
+    memCodes.set(code, codeData);
   } catch (e) {
     if (isMissingTableError(e)) {
       memCodes.set(code, codeData);
@@ -193,25 +217,19 @@ export async function exchangeCodeForTokens(params: {
 }> {
   const supabase = getServiceSupabase();
 
-  // 1. Verify client credentials
+  // 1. Verify client credentials in timing-safe manner
   const client = await getClient(params.clientId);
-  if (!client || client.client_secret !== params.clientSecret) {
+  if (!client || !safeCompare(client.client_secret, params.clientSecret)) {
     throw new Error("invalid_client: Invalid client credentials");
   }
 
+  // Ensure redirect_uri is registered for this client
+  if (!client.redirect_uris.includes(params.redirectUri)) {
+    throw new Error("invalid_grant: Redirect URI mismatch with client configuration");
+  }
+
   // 2. Fetch and consume authorization code
-  let codeRow: {
-    id?: string;
-    code: string;
-    client_id: string;
-    redirect_uri: string;
-    user_id: string | null;
-    scope: string;
-    expires_at: string;
-    used: boolean;
-    code_challenge?: string | null;
-    code_challenge_method?: string | null;
-  } | null = null;
+  let codeRow: OAuthCodeRecord | null = null;
 
   try {
     const { data, error } = await supabase
@@ -221,14 +239,18 @@ export async function exchangeCodeForTokens(params: {
       .eq("client_id", params.clientId)
       .maybeSingle();
 
-    if (error && isMissingTableError(error)) {
-      codeRow = (memCodes.get(params.code) as typeof codeRow) || null;
+    if (error) {
+      if (isMissingTableError(error)) {
+        codeRow = memCodes.get(params.code) || null;
+      } else {
+        throw new Error(error.message);
+      }
     } else {
-      codeRow = data || (memCodes.get(params.code) as typeof codeRow) || null;
+      codeRow = (data as OAuthCodeRecord | null) || memCodes.get(params.code) || null;
     }
   } catch (e) {
     if (isMissingTableError(e)) {
-      codeRow = (memCodes.get(params.code) as typeof codeRow) || null;
+      codeRow = memCodes.get(params.code) || null;
     } else {
       throw e;
     }
@@ -258,24 +280,30 @@ export async function exchangeCodeForTokens(params: {
     const method = (codeRow.code_challenge_method || "S256").toUpperCase();
     if (method === "S256") {
       const computed = crypto.createHash("sha256").update(params.codeVerifier).digest("base64url");
-      if (computed !== codeRow.code_challenge) {
+      if (!safeCompare(computed, codeRow.code_challenge)) {
         throw new Error("invalid_grant: PKCE code_verifier verification failed");
       }
     } else if (method === "PLAIN") {
-      if (params.codeVerifier !== codeRow.code_challenge) {
+      if (!safeCompare(params.codeVerifier, codeRow.code_challenge)) {
         throw new Error("invalid_grant: PKCE code_verifier verification failed");
       }
+    } else {
+      throw new Error("invalid_request: Transform algorithm not supported");
     }
   }
 
-  // Mark code as used
+  // Atomically mark code as used
   codeRow.used = true;
+  memCodes.set(params.code, codeRow);
   if (codeRow.id) {
-    try {
-      await supabase.from("oauth_codes").update({ used: true }).eq("id", codeRow.id);
-    } catch {}
-  } else {
-    memCodes.set(params.code, codeRow);
+    const { error: updateErr } = await supabase
+      .from("oauth_codes")
+      .update({ used: true })
+      .eq("id", codeRow.id)
+      .eq("used", false);
+    if (updateErr && !isMissingTableError(updateErr)) {
+      throw new Error(updateErr.message);
+    }
   }
 
   // 3. Issue access token (1 hour) and refresh token (30 days)
@@ -304,9 +332,13 @@ export async function exchangeCodeForTokens(params: {
       scope: codeRow.scope,
       expires_at: expiresAt,
     });
-    if (error && isMissingTableError(error)) {
-      memTokens.set(accessToken, tokenRecord);
-      memTokens.set(refreshToken, tokenRecord);
+    if (error) {
+      if (isMissingTableError(error)) {
+        memTokens.set(accessToken, tokenRecord);
+        memTokens.set(refreshToken, tokenRecord);
+      } else {
+        throw new Error(error.message);
+      }
     }
   } catch (e) {
     if (isMissingTableError(e)) {
@@ -317,7 +349,7 @@ export async function exchangeCodeForTokens(params: {
     }
   }
 
-  // Also cache in memory for instant lookups
+  // Cache in memory for fast lookup
   memTokens.set(accessToken, tokenRecord);
   memTokens.set(refreshToken, tokenRecord);
 
@@ -343,9 +375,9 @@ export async function refreshAccessToken(params: {
 }> {
   const supabase = getServiceSupabase();
 
-  // 1. Verify client credentials
+  // 1. Verify client credentials in timing-safe manner
   const client = await getClient(params.clientId);
-  if (!client || client.client_secret !== params.clientSecret) {
+  if (!client || !safeCompare(client.client_secret, params.clientSecret)) {
     throw new Error("invalid_client: Invalid client credentials");
   }
 
@@ -359,10 +391,14 @@ export async function refreshAccessToken(params: {
       .eq("client_id", params.clientId)
       .maybeSingle();
 
-    if (error && isMissingTableError(error)) {
-      tokenRow = memTokens.get(params.refreshToken) || null;
+    if (error) {
+      if (isMissingTableError(error)) {
+        tokenRow = memTokens.get(params.refreshToken) || null;
+      } else {
+        throw new Error(error.message);
+      }
     } else {
-      tokenRow = data || memTokens.get(params.refreshToken) || null;
+      tokenRow = (data as OAuthTokenRecord | null) || memTokens.get(params.refreshToken) || null;
     }
   } catch (e) {
     if (isMissingTableError(e)) {
@@ -383,9 +419,13 @@ export async function refreshAccessToken(params: {
     memTokens.set(tokenRow.access_token, tokenRow);
   }
   if (tokenRow.id) {
-    try {
-      await supabase.from("oauth_tokens").update({ revoked: true }).eq("id", tokenRow.id);
-    } catch {}
+    const { error: revErr } = await supabase
+      .from("oauth_tokens")
+      .update({ revoked: true })
+      .eq("id", tokenRow.id);
+    if (revErr && !isMissingTableError(revErr)) {
+      throw new Error(revErr.message);
+    }
   }
 
   // Issue fresh token pair
@@ -406,7 +446,7 @@ export async function refreshAccessToken(params: {
   };
 
   try {
-    await supabase.from("oauth_tokens").insert({
+    const { error: insErr } = await supabase.from("oauth_tokens").insert({
       access_token: newAccessToken,
       refresh_token: newRefreshToken,
       client_id: params.clientId,
@@ -414,7 +454,12 @@ export async function refreshAccessToken(params: {
       scope: tokenRow.scope,
       expires_at: expiresAt,
     });
-  } catch {}
+    if (insErr && !isMissingTableError(insErr)) {
+      throw new Error(insErr.message);
+    }
+  } catch (e) {
+    if (!isMissingTableError(e)) throw e;
+  }
 
   memTokens.set(newAccessToken, newTokenRecord);
   memTokens.set(newRefreshToken, newTokenRecord);
@@ -440,24 +485,27 @@ export async function verifyAccessToken(
       .from("oauth_tokens")
       .select("*")
       .eq("access_token", token)
-      .eq("revoked", false)
       .maybeSingle();
 
-    if (error && isMissingTableError(error)) {
-      data = memTokens.get(token) || null;
+    if (error) {
+      if (isMissingTableError(error)) {
+        data = memTokens.get(token) || null;
+      } else {
+        throw new Error(error.message);
+      }
     } else {
-      data = dbData || memTokens.get(token) || null;
+      data = (dbData as OAuthTokenRecord | null) || memTokens.get(token) || null;
     }
   } catch (e) {
     if (isMissingTableError(e)) {
       data = memTokens.get(token) || null;
     } else {
-      throw e;
+      return { valid: false, error: "Database error during token verification" };
     }
   }
 
   if (!data || data.revoked) {
-    return { valid: false, error: "Invalid token" };
+    return { valid: false, error: "Invalid or revoked token" };
   }
 
   if (new Date(data.expires_at) < new Date()) {
@@ -505,15 +553,18 @@ export async function issueApiKey(name: string): Promise<{ id: string; key: stri
       .select()
       .single();
 
-    if (error && isMissingTableError(error)) {
-      memTokens.set(rawKey, record);
-      return { id: record.id, key: rawKey, name: cleanName, created_at: new Date().toISOString() };
+    if (error) {
+      if (isMissingTableError(error)) {
+        memTokens.set(rawKey, record);
+        return { id: record.id, key: rawKey, name: cleanName, created_at: new Date().toISOString() };
+      }
+      throw new Error(error.message);
     }
-    if (error) throw new Error(error.message);
 
-    memTokens.set(rawKey, data as OAuthTokenRecord);
+    const saved = data as OAuthTokenRecord;
+    memTokens.set(rawKey, saved);
     return {
-      id: (data as { id: string }).id,
+      id: saved.id,
       key: rawKey,
       name: cleanName,
       created_at: (data as { created_at?: string }).created_at || new Date().toISOString(),
@@ -559,16 +610,13 @@ export async function listApiKeys(): Promise<
       throw new Error(error.message);
     }
 
-    const dbList = (data || []).map((t) => ({
+    return (data || []).map((t) => ({
       id: t.id,
       name: (t.client_id || "").replace(/^key:/, "") || "API Key",
       maskedKey: `${t.access_token.slice(0, 12)}...${t.access_token.slice(-4)}`,
       created_at: t.created_at,
       revoked: t.revoked,
     }));
-
-    if (dbList.length > 0) return dbList;
-    return memList;
   } catch (e) {
     if (isMissingTableError(e)) return memList;
     throw e;
@@ -584,7 +632,10 @@ export async function revokeApiKey(id: string): Promise<void> {
     }
   }
   try {
-    await supabase.from("oauth_tokens").update({ revoked: true }).eq("id", id);
+    const { error } = await supabase.from("oauth_tokens").update({ revoked: true }).eq("id", id);
+    if (error && !isMissingTableError(error)) {
+      throw new Error(error.message);
+    }
   } catch (e) {
     if (!isMissingTableError(e)) throw e;
   }
