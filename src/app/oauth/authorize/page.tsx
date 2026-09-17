@@ -67,7 +67,7 @@ function ConsentContent() {
     target.searchParams.set("scope", scope);
     target.searchParams.set("consent", "approved");
 
-    window.location.href = target.toString();
+    window.location.assign(target.toString());
   };
 
   const handleDeny = () => {
@@ -79,7 +79,7 @@ function ConsentContent() {
     target.searchParams.set("error", "access_denied");
     target.searchParams.set("error_description", "The user denied the authorization request");
     if (state) target.searchParams.set("state", state);
-    window.location.href = target.toString();
+    window.location.assign(target.toString());
   };
 
   const redirectHost = (() => {

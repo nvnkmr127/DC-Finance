@@ -283,14 +283,12 @@ export default function DashboardPage() {
 
     const netPerMonth = expectedRevenue - expectedCost;
     const [fy0, fm0] = month.split("-").map(Number);
-    let running = cashBalance;
     const forecast = Array.from({ length: forecastDuration }, (_, i) => {
-      running += netPerMonth;
       const dt = new Date(fy0, fm0 - 1 + i + 1, 1);
       return {
         key: `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}`,
         label: dt.toLocaleString("en-IN", { month: "short", year: "2-digit" }),
-        cash: running,
+        cash: cashBalance + netPerMonth * (i + 1),
       };
     });
     const runwayMonths = netPerMonth < 0 && cashBalance > 0 ? cashBalance / -netPerMonth : null;

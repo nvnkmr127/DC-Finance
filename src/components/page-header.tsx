@@ -1,5 +1,6 @@
 "use client";
 
+import { createElement } from "react";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -55,12 +56,12 @@ export function PageHeader({
   icon?: LucideIcon; // override the route-derived icon if needed
 }) {
   const pathname = usePathname();
-  const Icon = icon ?? iconFor(pathname);
+  const iconComponent = icon ?? iconFor(pathname);
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex items-center gap-3">
         <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary/15 to-emerald-500/10 text-primary">
-          <Icon className="h-5 w-5" />
+          {createElement(iconComponent, { className: "h-5 w-5" })}
         </span>
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
