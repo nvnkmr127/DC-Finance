@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Field } from "@/components/form-field";
+import { ServiceSearch } from "@/components/service-search";
 import { useSettings } from "@/components/settings-provider";
 import {
   invoiceSchema,
@@ -52,6 +53,7 @@ const emptyValues = (): InvoiceInput => ({
   status: "draft",
   notes: "",
   is_gst_invoice: false,
+  is_tax_inclusive: false,
   hsn_sac: "998314",
   gst_rate: 18,
   tax_type: "cgst_sgst",
@@ -87,6 +89,7 @@ export function InvoiceForm({
     handleSubmit,
     control,
     reset,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<InvoiceInput>({
     resolver: zodResolver(invoiceSchema),
@@ -310,10 +313,21 @@ export function InvoiceForm({
                   return (
                     <div key={f.id} className="flex items-start gap-2">
                       <div className="flex-1">
-                        <Input
-                          placeholder="Description"
-                          aria-invalid={!!errors.items?.[i]?.description}
-                          {...register(`items.${i}.description`)}
+                        <Controller
+                          control={control}
+                          name={`items.${i}.description`}
+                          render={({ field }) => (
+                            <ServiceSearch
+                              id={`service-search-${i}`}
+                              value={field.value}
+                              onChange={field.onChange}
+                              onSelectService={(srv) => {
+                                setValue(`items.${i}.unit_price`, srv.price);
+                              }}
+                              placeholder="Select catalog service or type custom description…"
+                              error={!!errors.items?.[i]?.description}
+                            />
+                          )}
                         />
                         {errors.items?.[i]?.description && (
                           <p className="mt-1 text-xs text-destructive">
