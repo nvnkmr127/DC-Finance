@@ -27,6 +27,7 @@ export default function InvoiceDetailPage() {
 
   const { formatCurrency, settings } = useSettings();
   const company = settings?.company_name || "Digicloudify Finance";
+  const companyLogo = settings?.company_logo;
   const companyGstin = settings?.company_gstin;
   const companyState = settings?.company_state || "Telangana";
   const companyAddress = settings?.company_address;
@@ -98,6 +99,10 @@ export default function InvoiceDetailPage() {
         {/* Header */}
         <div className="flex items-start justify-between gap-4 border-b pb-6">
           <div>
+            {companyLogo && (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src={companyLogo} alt={company} className="h-12 w-auto max-w-[200px] object-contain mb-3" />
+            )}
             <h1 className="text-2xl font-bold tracking-tight">{company}</h1>
             <p className="mt-0.5 text-sm font-semibold uppercase tracking-wider text-primary">
               {isGst ? "GST TAX INVOICE" : "INVOICE"}

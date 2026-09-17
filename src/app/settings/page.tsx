@@ -23,6 +23,7 @@ export default function SettingsPage() {
   
   // Local state for the form
   const [companyName, setCompanyName] = useState("");
+  const [companyLogo, setCompanyLogo] = useState("");
   const [companyGstin, setCompanyGstin] = useState("");
   const [companyState, setCompanyState] = useState("Telangana");
   const [companyAddress, setCompanyAddress] = useState("");
@@ -63,6 +64,23 @@ export default function SettingsPage() {
     }
   }
 
+  const handleLogoFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error("Logo image must be under 2MB");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === "string") {
+        setCompanyLogo(reader.result);
+        toast.success("Logo loaded");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   useEffect(() => {
     (async () => {
       try {
@@ -77,6 +95,7 @@ export default function SettingsPage() {
   useEffect(() => {
     if (settings) {
       setCompanyName(settings.company_name);
+      setCompanyLogo(settings.company_logo ?? "");
       setCompanyGstin(settings.company_gstin ?? "");
       setCompanyState(settings.company_state ?? "Telangana");
       setCompanyAddress(settings.company_address ?? "");
@@ -201,6 +220,7 @@ export default function SettingsPage() {
       setSaving(true);
       await updateSettings({
         company_name: companyName,
+        company_logo: companyLogo.trim() || null,
         company_gstin: companyGstin.trim() || null,
         company_state: companyState.trim() || "Telangana",
         company_address: companyAddress.trim() || null,
@@ -239,7 +259,7 @@ export default function SettingsPage() {
         <Card>
           <CardHeader>
             <CardTitle>Company & GST Profile</CardTitle>
-            <CardDescription>Legal company details and GSTIN for tax invoicing.</CardDescription>
+            <CardDescription>Legal company details and logo for invoices & branding.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -250,7 +270,36 @@ export default function SettingsPage() {
                 placeholder="E.g. Digicloudify Finance"
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+
+            {/* Company Logo Section */}
+            <div className="space-y-2 border-t pt-3">
+              <Label>Company Logo</Label>
+              {companyLogo ? (
+                <div className="flex items-center gap-3 p-3 border rounded-lg bg-muted/20">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={companyLogo} alt="Company Logo Preview" className="h-12 max-w-[160px] object-contain rounded" />
+                  <div className="flex-1 text-xs text-muted-foreground">
+                    Logo loaded
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setCompanyLogo("")}>
+                    Remove
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Input type="file" accept="image/*" onChange={handleLogoFileChange} className="text-xs cursor-pointer" />
+                  <p className="text-[11px] text-muted-foreground">Or paste an image URL:</p>
+                  <Input
+                    value={companyLogo}
+                    onChange={(e) => setCompanyLogo(e.target.value)}
+                    placeholder="https://example.com/logo.png"
+                    className="text-xs"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3 border-t pt-3">
               <div className="space-y-2">
                 <Label>GSTIN</Label>
                 <Input
