@@ -27,6 +27,7 @@ ALTER TABLE invoices
   ADD COLUMN IF NOT EXISTS grand_total numeric(12,2);
 
 -- 4. Re-create invoice_summary view to include GST columns & financial totals
+DROP VIEW IF EXISTS invoice_summary CASCADE;
 CREATE OR REPLACE VIEW invoice_summary AS
 SELECT
   i.id,
