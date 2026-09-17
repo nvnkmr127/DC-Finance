@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Loader2, Mail, Phone, Briefcase, History, TrendingUp, TrendingDown, Pencil, FileText } from "lucide-react";
+import { ArrowLeft, Loader2, Mail, Phone, Briefcase, History, TrendingUp, TrendingDown, Pencil, FileText, Printer } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -371,12 +371,13 @@ export default function ClientDetailPage() {
                     <TableHead>Method</TableHead>
                     <TableHead>Notes</TableHead>
                     <TableHead className="text-right">Amount</TableHead>
+                    <TableHead className="text-right">Receipt</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {payments.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="h-24 text-center text-sm text-muted-foreground">
+                      <TableCell colSpan={5} className="h-24 text-center text-sm text-muted-foreground">
                         No payments recorded
                       </TableCell>
                     </TableRow>
@@ -387,11 +388,19 @@ export default function ClientDetailPage() {
                           {formatDate(p.payment_date)}
                         </TableCell>
                         <TableCell>{p.payment_method}</TableCell>
-                        <TableCell className="max-w-[220px] truncate text-muted-foreground">
+                        <TableCell className="max-w-[180px] truncate text-muted-foreground">
                           {p.notes || "—"}
                         </TableCell>
                         <TableCell className="text-right tabular-nums font-medium">
                           {formatINR(p.amount)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <Button asChild variant="ghost" size="sm" className="h-7 px-2 text-xs">
+                            <Link href={`/payments/${p.id}`}>
+                              <Printer className="mr-1 h-3.5 w-3.5 text-primary" />
+                              Receipt
+                            </Link>
+                          </Button>
                         </TableCell>
                       </TableRow>
                     ))
