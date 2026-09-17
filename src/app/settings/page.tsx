@@ -23,6 +23,10 @@ export default function SettingsPage() {
   
   // Local state for the form
   const [companyName, setCompanyName] = useState("");
+  const [companyGstin, setCompanyGstin] = useState("");
+  const [companyState, setCompanyState] = useState("Telangana");
+  const [companyAddress, setCompanyAddress] = useState("");
+  const [companyPan, setCompanyPan] = useState("");
   const [currency, setCurrency] = useState("INR");
   const [fyStart, setFyStart] = useState("04-01");
 
@@ -73,6 +77,10 @@ export default function SettingsPage() {
   useEffect(() => {
     if (settings) {
       setCompanyName(settings.company_name);
+      setCompanyGstin(settings.company_gstin ?? "");
+      setCompanyState(settings.company_state ?? "Telangana");
+      setCompanyAddress(settings.company_address ?? "");
+      setCompanyPan(settings.company_pan ?? "");
       setCurrency(settings.default_currency);
       setFyStart(settings.financial_year_start);
       setCategories([...settings.expense_categories]);
@@ -193,6 +201,10 @@ export default function SettingsPage() {
       setSaving(true);
       await updateSettings({
         company_name: companyName,
+        company_gstin: companyGstin.trim() || null,
+        company_state: companyState.trim() || "Telangana",
+        company_address: companyAddress.trim() || null,
+        company_pan: companyPan.trim() || null,
         default_currency: currency,
         financial_year_start: fyStart.trim() || "04-01",
         expense_categories: categories,
@@ -226,8 +238,8 @@ export default function SettingsPage() {
       <div className="grid gap-6 md:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>Company Profile</CardTitle>
-            <CardDescription>Basic information about your business.</CardDescription>
+            <CardTitle>Company & GST Profile</CardTitle>
+            <CardDescription>Legal company details and GSTIN for tax invoicing.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -235,10 +247,45 @@ export default function SettingsPage() {
               <Input
                 value={companyName}
                 onChange={(e) => setCompanyName(e.target.value)}
-                placeholder="E.g. Acme Corp"
+                placeholder="E.g. Digicloudify Finance"
               />
             </div>
-            {/* Logo uploading could be added here later */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>GSTIN</Label>
+                <Input
+                  value={companyGstin}
+                  onChange={(e) => setCompanyGstin(e.target.value.toUpperCase())}
+                  placeholder="36AAAAA0000A1Z5"
+                  maxLength={15}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>State / Union Territory</Label>
+                <Input
+                  value={companyState}
+                  onChange={(e) => setCompanyState(e.target.value)}
+                  placeholder="Telangana"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>PAN Number</Label>
+              <Input
+                value={companyPan}
+                onChange={(e) => setCompanyPan(e.target.value.toUpperCase())}
+                placeholder="ABCDE1234F"
+                maxLength={10}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Billing Address</Label>
+              <Input
+                value={companyAddress}
+                onChange={(e) => setCompanyAddress(e.target.value)}
+                placeholder="Plot No. 12, Hitech City, Hyderabad, Telangana 500081"
+              />
+            </div>
           </CardContent>
         </Card>
 

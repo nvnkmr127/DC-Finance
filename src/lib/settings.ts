@@ -4,6 +4,10 @@ export type Settings = {
   id: number;
   company_name: string;
   company_logo: string | null;
+  company_gstin?: string | null;
+  company_state?: string | null;
+  company_address?: string | null;
+  company_pan?: string | null;
   default_currency: string;
   financial_year_start: string;
   expense_categories: string[];
@@ -26,6 +30,10 @@ export async function getSettings(): Promise<Settings> {
       id: 1,
       company_name: "Digicloudify Finance",
       company_logo: null,
+      company_gstin: null,
+      company_state: "Telangana",
+      company_address: null,
+      company_pan: null,
       default_currency: "INR",
       financial_year_start: "04-01",
       expense_categories: ["Office", "Software", "Advertising", "Equipment", "Travel", "Internet", "Electricity", "Freelancers", "Salary", "Other"],

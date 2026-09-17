@@ -47,6 +47,9 @@ const empty: ClientInput = {
   billing_cycle: "monthly",
   status: "active",
   notes: "",
+  gstin: "",
+  state: "",
+  address: "",
 };
 
 export function ClientForm({
@@ -240,8 +243,21 @@ export function ClientForm({
                 )}
               />
             </Field>
+
+            <Field label="GSTIN (optional)" htmlFor="gstin" error={errors.gstin?.message}>
+              <Input id="gstin" {...register("gstin")} placeholder="36BBBCC1111B1Z2" maxLength={15} />
+            </Field>
+
+            <Field label="State / Place of Supply" htmlFor="state" error={errors.state?.message}>
+              <Input id="state" {...register("state")} placeholder="E.g. Telangana or Karnataka" />
+            </Field>
+
+            <Field label="Billing Address" htmlFor="address" error={errors.address?.message} className="sm:col-span-2">
+              <Input id="address" {...register("address")} placeholder="Client billing street address, city, state & pincode" />
+            </Field>
+
             <Field label="Notes" htmlFor="notes" error={errors.notes?.message} className="sm:col-span-2">
-              <Textarea id="notes" {...register("notes")} placeholder="Optional notes" rows={3} />
+              <Textarea id="notes" {...register("notes")} placeholder="Optional notes" rows={2} />
             </Field>
           </div>
 

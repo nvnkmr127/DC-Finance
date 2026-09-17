@@ -14,15 +14,15 @@ export const clientSchema = z.object({
     .regex(/^[0-9+\-\s()]+$/, "Only digits and + - ( ) allowed"),
   email: z.string().email("Enter a valid email"),
   service: z.string().min(1, "Service is required").max(120),
-  // Amount charged per billing cycle (see billing_cycle). For commission clients
-  // this is not a fixed recurring figure — leave 0 and record each payment when a
-  // sale closes.
   monthly_value: z
     .number({ error: "Enter a number" })
     .min(0, "Must be 0 or more"),
   billing_cycle: z.enum(["monthly", "quarterly", "commission"]),
   status: z.enum(["active", "inactive"]),
   notes: z.string().max(1000).optional().or(z.literal("")),
+  gstin: z.string().max(15, "GSTIN must be at most 15 characters").optional().or(z.literal("")),
+  state: z.string().max(100).optional().or(z.literal("")),
+  address: z.string().max(500).optional().or(z.literal("")),
 });
 
 export type ClientInput = z.infer<typeof clientSchema>;

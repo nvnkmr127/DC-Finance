@@ -33,6 +33,7 @@ import {
   updateInvoice,
   invoiceTotal,
   lineAmount,
+  calculateGstBreakdown,
   type InvoiceInput,
   type InvoiceItemInput,
   type InvoiceSummary,
@@ -50,6 +51,11 @@ const emptyValues = (): InvoiceInput => ({
   due_date: inDays(30),
   status: "draft",
   notes: "",
+  is_gst_invoice: false,
+  hsn_sac: "998314",
+  gst_rate: 18,
+  tax_type: "cgst_sgst",
+  reverse_charge: false,
   items: [emptyItem()],
 });
 
@@ -99,6 +105,11 @@ export function InvoiceForm({
             due_date: invoice.due_date,
             status: invoice.status,
             notes: invoice.notes ?? "",
+            is_gst_invoice: invoice.is_gst_invoice ?? false,
+            hsn_sac: invoice.hsn_sac ?? "998314",
+            gst_rate: invoice.gst_rate ?? 18,
+            tax_type: invoice.tax_type ?? "cgst_sgst",
+            reverse_charge: invoice.reverse_charge ?? false,
             items: items?.length ? items : [emptyItem()],
           }
         : emptyValues(),
@@ -107,12 +118,20 @@ export function InvoiceForm({
 
   // Live total preview.
   const watchedItems = useWatch({ control, name: "items" });
-  const total = invoiceTotal(
+  const watchedIsGst = useWatch({ control, name: "is_gst_invoice" });
+  const watchedGstRate = useWatch({ control, name: "gst_rate" }) ?? 18;
+  const watchedIsInclusive = useWatch({ control, name: "is_tax_inclusive" }) ?? false;
+
+  const rawTotal = invoiceTotal(
     (watchedItems ?? []).map((i) => ({
       quantity: Number(i.quantity) || 0,
       unit_price: Number(i.unit_price) || 0,
     })),
   );
+  const gstPreview = calculateGstBreakdown(rawTotal, watchedIsGst, watchedGstRate, watchedIsInclusive);
+  const subtotal = gstPreview.subtotal;
+  const taxAmount = gstPreview.totalTax;
+  const grandTotal = gstPreview.grandTotal;
 
   const onSubmit = async (values: InvoiceInput) => {
     try {
@@ -198,6 +217,80 @@ export function InvoiceForm({
               </Field>
             </div>
 
+            {/* GST Tax Invoice Controls */}
+            <div className="rounded-lg border bg-muted/40 p-3 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">GST Tax Invoice</p>
+                  <p className="text-xs text-muted-foreground">Issue as official tax invoice with HSN/SAC & GST breakdown</p>
+                </div>
+                <Controller
+                  control={control}
+                  name="is_gst_invoice"
+                  render={({ field }) => (
+                    <input
+                      type="checkbox"
+                      id="is_gst_invoice"
+                      checked={field.value ?? false}
+                      onChange={(e) => field.onChange(e.target.checked)}
+                      className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary"
+                    />
+                  )}
+                />
+              </div>
+
+              {watchedIsGst && (
+                <div className="grid grid-cols-3 gap-3 pt-1">
+                  <Field label="HSN/SAC Code" htmlFor="hsn_sac" error={errors.hsn_sac?.message}>
+                    <Input id="hsn_sac" {...register("hsn_sac")} placeholder="998314" />
+                  </Field>
+                  <Field label="GST Rate" htmlFor="gst_rate" error={errors.gst_rate?.message}>
+                    <Controller
+                      control={control}
+                      name="gst_rate"
+                      render={({ field }) => (
+                        <Select
+                          value={String(field.value ?? 18)}
+                          onValueChange={(val) => field.onChange(Number(val))}
+                        >
+                          <SelectTrigger id="gst_rate">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="0">0% (Exempt)</SelectItem>
+                            <SelectItem value="5">5% GST</SelectItem>
+                            <SelectItem value="12">12% GST</SelectItem>
+                            <SelectItem value="18">18% GST (Standard)</SelectItem>
+                            <SelectItem value="28">28% GST</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </Field>
+                  <Field label="Tax Mode" htmlFor="is_tax_inclusive">
+                    <Controller
+                      control={control}
+                      name="is_tax_inclusive"
+                      render={({ field }) => (
+                        <Select
+                          value={field.value ? "inclusive" : "exclusive"}
+                          onValueChange={(val) => field.onChange(val === "inclusive")}
+                        >
+                          <SelectTrigger id="is_tax_inclusive">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="exclusive">+ GST (Exclusive)</SelectItem>
+                            <SelectItem value="inclusive">Incl. GST (Inclusive)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      )}
+                    />
+                  </Field>
+                </div>
+              )}
+            </div>
+
             {/* Line items */}
             <div className="space-y-2">
               <div className="flex items-center justify-between">
@@ -262,8 +355,26 @@ export function InvoiceForm({
                   );
                 })}
               </div>
-              <div className="flex justify-end border-t pt-2 text-sm font-semibold">
-                Total: <span className="ml-2 tabular-nums">{formatCurrency(total)}</span>
+              
+              {/* Financial Totals Preview */}
+              <div className="border-t pt-2 space-y-1 text-sm">
+                <div className="flex justify-between text-muted-foreground">
+                  <span>Subtotal (Taxable Value):</span>
+                  <span className="tabular-nums font-medium">{formatCurrency(subtotal)}</span>
+                </div>
+                {watchedIsGst && (
+                  <div className="flex justify-between text-muted-foreground">
+                    <span>
+                      GST ({watchedGstRate}%
+                      {watchedIsInclusive ? " — Included" : " — Added"}):
+                    </span>
+                    <span className="tabular-nums font-medium">{formatCurrency(taxAmount)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-base font-bold pt-1 border-t">
+                  <span>Grand Total:</span>
+                  <span className="tabular-nums text-primary">{formatCurrency(grandTotal)}</span>
+                </div>
               </div>
             </div>
 

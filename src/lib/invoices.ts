@@ -17,11 +17,18 @@ export const invoiceSchema = z.object({
   due_date: z.string().min(1, "Select a due date"),
   status: z.enum(["draft", "sent", "cancelled"]),
   notes: z.string().max(1000).optional().or(z.literal("")),
+  is_gst_invoice: z.boolean().default(false),
+  is_tax_inclusive: z.boolean().default(false),
+  hsn_sac: z.string().max(20).default("998314"),
+  gst_rate: z.number().min(0).max(100).default(18),
+  tax_type: z.enum(["cgst_sgst", "igst"]).default("cgst_sgst"),
+  reverse_charge: z.boolean().default(false),
   items: z.array(invoiceItemSchema).min(1, "Add at least one line item"),
 });
 
 export type InvoiceItemInput = z.infer<typeof invoiceItemSchema>;
-export type InvoiceInput = z.infer<typeof invoiceSchema>;
+export type InvoiceInput = z.input<typeof invoiceSchema>;
+export type InvoiceParsed = z.infer<typeof invoiceSchema>;
 
 // ---- Types ---------------------------------------------------------------
 
@@ -38,11 +45,22 @@ export type InvoiceSummary = {
   client_id: string;
   client_name: string;
   client_company: string;
+  client_gstin?: string | null;
+  client_state?: string | null;
+  client_address?: string | null;
   issue_date: string;
   due_date: string;
   status: "draft" | "sent" | "cancelled";
   display_status: "draft" | "sent" | "cancelled" | "paid" | "partial";
   notes: string | null;
+  is_gst_invoice?: boolean;
+  is_tax_inclusive?: boolean;
+  hsn_sac?: string | null;
+  gst_rate?: number | null;
+  tax_type?: "cgst_sgst" | "igst" | null;
+  reverse_charge?: boolean;
+  subtotal?: number | null;
+  tax_amount?: number | null;
   total: number;
   paid: number;
   balance: number;
@@ -57,6 +75,152 @@ export const lineAmount = (i: { quantity: number; unit_price: number }): number 
 
 export const invoiceTotal = (items: { quantity: number; unit_price: number }[]): number =>
   items.reduce((s, i) => s + lineAmount(i), 0);
+
+export type GstBreakdown = {
+  subtotal: number;
+  isGst: boolean;
+  isTaxInclusive: boolean;
+  gstRate: number;
+  taxType: "cgst_sgst" | "igst";
+  cgstRate: number;
+  cgstAmount: number;
+  sgstRate: number;
+  sgstAmount: number;
+  igstRate: number;
+  igstAmount: number;
+  totalTax: number;
+  grandTotal: number;
+};
+
+export function calculateGstBreakdown(
+  rawAmount: number,
+  isGstInvoice = false,
+  gstRate = 18,
+  isTaxInclusive = false,
+  companyState?: string | null,
+  clientState?: string | null
+): GstBreakdown {
+  if (!isGstInvoice || rawAmount <= 0) {
+    return {
+      subtotal: rawAmount,
+      isGst: false,
+      isTaxInclusive: false,
+      gstRate: 0,
+      taxType: "cgst_sgst",
+      cgstRate: 0,
+      cgstAmount: 0,
+      sgstRate: 0,
+      sgstAmount: 0,
+      igstRate: 0,
+      igstAmount: 0,
+      totalTax: 0,
+      grandTotal: rawAmount,
+    };
+  }
+
+  const compState = (companyState || "Telangana").trim().toLowerCase();
+  const cliState = (clientState || "Telangana").trim().toLowerCase();
+  const isIntraState = compState === cliState;
+  const taxType = isIntraState ? "cgst_sgst" : "igst";
+
+  let subtotal = rawAmount;
+  let grandTotal = rawAmount;
+  let totalTax = 0;
+
+  if (isTaxInclusive) {
+    grandTotal = rawAmount;
+    subtotal = Math.round((rawAmount / (1 + gstRate / 100)) * 100) / 100;
+    totalTax = Math.round((grandTotal - subtotal) * 100) / 100;
+  } else {
+    subtotal = rawAmount;
+    totalTax = Math.round((subtotal * (gstRate / 100)) * 100) / 100;
+    grandTotal = Math.round((subtotal + totalTax) * 100) / 100;
+  }
+
+  if (taxType === "cgst_sgst") {
+    const cgstRate = gstRate / 2;
+    const sgstRate = gstRate / 2;
+    const cgstAmount = Math.round((totalTax / 2) * 100) / 100;
+    const sgstAmount = Math.round((totalTax - cgstAmount) * 100) / 100;
+    return {
+      subtotal,
+      isGst: true,
+      isTaxInclusive,
+      gstRate,
+      taxType: "cgst_sgst",
+      cgstRate,
+      cgstAmount,
+      sgstRate,
+      sgstAmount,
+      igstRate: 0,
+      igstAmount: 0,
+      totalTax,
+      grandTotal,
+    };
+  } else {
+    return {
+      subtotal,
+      isGst: true,
+      isTaxInclusive,
+      gstRate,
+      taxType: "igst",
+      cgstRate: 0,
+      cgstAmount: 0,
+      sgstRate: 0,
+      sgstAmount: 0,
+      igstRate: gstRate,
+      igstAmount: totalTax,
+      totalTax,
+      grandTotal,
+    };
+  }
+}
+
+export function numberToIndianWords(amount: number): string {
+  if (isNaN(amount) || amount === 0) return "INR Zero Only";
+  const num = Math.round(amount);
+  const units = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten",
+    "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+  function convertTwoDigits(n: number): string {
+    if (n < 20) return units[n];
+    return `${tens[Math.floor(n / 10)]}${n % 10 !== 0 ? " " + units[n % 10] : ""}`;
+  }
+
+  function convertThreeDigits(n: number): string {
+    let str = "";
+    if (Math.floor(n / 100) > 0) {
+      str += `${units[Math.floor(n / 100)]} Hundred`;
+    }
+    const rem = n % 100;
+    if (rem > 0) {
+      str += str ? ` ${convertTwoDigits(rem)}` : convertTwoDigits(rem);
+    }
+    return str;
+  }
+
+  let result = "";
+  let n = num;
+
+  if (Math.floor(n / 10000000) > 0) {
+    result += `${convertTwoDigits(Math.floor(n / 10000000))} Crore `;
+    n %= 10000000;
+  }
+  if (Math.floor(n / 100000) > 0) {
+    result += `${convertTwoDigits(Math.floor(n / 100000))} Lakh `;
+    n %= 100000;
+  }
+  if (Math.floor(n / 1000) > 0) {
+    result += `${convertTwoDigits(Math.floor(n / 1000))} Thousand `;
+    n %= 1000;
+  }
+  if (n > 0) {
+    result += convertThreeDigits(n);
+  }
+
+  return `INR ${result.trim()} Only`;
+}
 
 // Next sequential number (INV-0001). Derived from the highest existing suffix so
 // it survives deletions. Single-user tool, so the tiny concurrent-insert race is
@@ -106,7 +270,11 @@ export async function getInvoiceItems(invoiceId: string): Promise<InvoiceItem[]>
 export async function createInvoice(input: InvoiceInput): Promise<void> {
   const supabase = getSupabase();
   const invoice_number = await nextInvoiceNumber();
-  const total = invoiceTotal(input.items);
+  const rawTotal = invoiceTotal(input.items);
+  const is_gst_invoice = input.is_gst_invoice ?? false;
+  const is_tax_inclusive = input.is_tax_inclusive ?? false;
+  const gst_rate = input.gst_rate ?? 18;
+  const gst = calculateGstBreakdown(rawTotal, is_gst_invoice, gst_rate, is_tax_inclusive);
 
   const { data, error } = await supabase
     .from("invoices")
@@ -117,7 +285,16 @@ export async function createInvoice(input: InvoiceInput): Promise<void> {
       due_date: input.due_date,
       status: input.status,
       notes: input.notes,
-      total,
+      is_gst_invoice,
+      is_tax_inclusive,
+      hsn_sac: input.hsn_sac ?? "998314",
+      gst_rate,
+      tax_type: input.tax_type ?? "cgst_sgst",
+      reverse_charge: input.reverse_charge ?? false,
+      subtotal: gst.subtotal,
+      tax_amount: gst.totalTax,
+      grand_total: gst.grandTotal,
+      total: gst.grandTotal,
     })
     .select("id")
     .single();
@@ -140,7 +317,11 @@ export async function createInvoice(input: InvoiceInput): Promise<void> {
     issue_date: input.issue_date,
     due_date: input.due_date,
     status: input.status,
-    total,
+    total: gst.grandTotal,
+    subtotal: gst.subtotal,
+    tax_amount: gst.totalTax,
+    is_gst_invoice,
+    is_tax_inclusive,
     items,
   });
 }
@@ -182,6 +363,12 @@ export async function generateInvoicesForMonth(
       due_date,
       status: "draft",
       notes: `Auto-generated for ${month}`,
+      is_gst_invoice: false,
+      is_tax_inclusive: false,
+      hsn_sac: "998314",
+      gst_rate: 18,
+      tax_type: "cgst_sgst",
+      reverse_charge: false,
       items: [{ description: `${c.service} — ${c.billing_cycle === "quarterly" ? "quarter from" : "month"} ${month}`, quantity: 1, unit_price: c.monthly_value }],
     });
     created++;
@@ -191,7 +378,11 @@ export async function generateInvoicesForMonth(
 
 export async function updateInvoice(id: string, input: InvoiceInput): Promise<void> {
   const supabase = getSupabase();
-  const total = invoiceTotal(input.items);
+  const rawTotal = invoiceTotal(input.items);
+  const is_gst_invoice = input.is_gst_invoice ?? false;
+  const is_tax_inclusive = input.is_tax_inclusive ?? false;
+  const gst_rate = input.gst_rate ?? 18;
+  const gst = calculateGstBreakdown(rawTotal, is_gst_invoice, gst_rate, is_tax_inclusive);
 
   const { error } = await supabase
     .from("invoices")
@@ -201,7 +392,16 @@ export async function updateInvoice(id: string, input: InvoiceInput): Promise<vo
       due_date: input.due_date,
       status: input.status,
       notes: input.notes,
-      total,
+      is_gst_invoice,
+      is_tax_inclusive,
+      hsn_sac: input.hsn_sac ?? "998314",
+      gst_rate,
+      tax_type: input.tax_type ?? "cgst_sgst",
+      reverse_charge: input.reverse_charge ?? false,
+      subtotal: gst.subtotal,
+      tax_amount: gst.totalTax,
+      grand_total: gst.grandTotal,
+      total: gst.grandTotal,
     })
     .eq("id", id);
   if (error) throw new Error(error.message);
@@ -226,7 +426,11 @@ export async function updateInvoice(id: string, input: InvoiceInput): Promise<vo
     issue_date: input.issue_date,
     due_date: input.due_date,
     status: input.status,
-    total,
+    total: gst.grandTotal,
+    subtotal: gst.subtotal,
+    tax_amount: gst.totalTax,
+    is_gst_invoice,
+    is_tax_inclusive,
     items,
   });
 }
