@@ -10,6 +10,7 @@ import {
   Eye,
   Loader2,
   AlertCircle,
+  Printer,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
@@ -379,6 +380,12 @@ export default function PaymentsPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
+                        <DropdownMenuItem asChild>
+                          <Link href={`/payments/${p.id}`}>
+                            <Printer className="h-4 w-4" />
+                            Payment Receipt
+                          </Link>
+                        </DropdownMenuItem>
                         <DropdownMenuItem onSelect={() => setViewing(p)}>
                           <Eye className="h-4 w-4" />
                           View details
@@ -434,6 +441,16 @@ export default function PaymentsPage() {
               <dt className="text-muted-foreground">Notes</dt>
               <dd className="col-span-2 whitespace-pre-wrap">{viewing.notes || "—"}</dd>
             </dl>
+          )}
+          {viewing && (
+            <div className="pt-3 border-t flex justify-end">
+              <Button asChild size="sm">
+                <Link href={`/payments/${viewing.id}`}>
+                  <Printer className="h-4 w-4" />
+                  View & Print Receipt
+                </Link>
+              </Button>
+            </div>
           )}
         </DialogContent>
       </Dialog>

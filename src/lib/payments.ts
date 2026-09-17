@@ -116,3 +116,45 @@ export async function deletePayment(id: string): Promise<void> {
   if (error) throw new Error(error.message);
   dispatchWebhookEvent("payment.deleted", { id });
 }
+
+export type PaymentDetail = PaymentWithClient & {
+  clients: {
+    name: string;
+    company: string;
+    gstin?: string | null;
+    address?: string | null;
+  } | null;
+  invoice?: {
+    invoice_number: string;
+    total: number;
+    issue_date: string;
+  } | null;
+};
+
+export async function getPayment(id: string): Promise<PaymentDetail> {
+  const { data, error } = await getSupabase()
+    .from("payments")
+    .select("*, clients(name, company, gstin, address)")
+    .eq("id", id)
+    .single();
+  if (error) throw new Error(error.message);
+
+  let invoice = null;
+  if (data.invoice_id) {
+    const { data: inv } = await getSupabase()
+      .from("invoices")
+      .select("invoice_number, grand_total, issue_date")
+      .eq("id", data.invoice_id)
+      .maybeSingle();
+    if (inv) {
+      invoice = {
+        invoice_number: inv.invoice_number,
+        total: Number(inv.grand_total) || 0,
+        issue_date: inv.issue_date,
+      };
+    }
+  }
+
+  return { ...(data as unknown as PaymentWithClient), clients: data.clients, invoice };
+}
+
