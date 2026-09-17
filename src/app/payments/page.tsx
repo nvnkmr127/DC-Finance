@@ -131,6 +131,9 @@ export default function PaymentsPage() {
 
   useEffect(() => {
     refetch();
+    const handleRefetch = () => refetch();
+    window.addEventListener("dc-finance:refetch", handleRefetch);
+    return () => window.removeEventListener("dc-finance:refetch", handleRefetch);
   }, []);
 
   const summary = useMemo(() => {

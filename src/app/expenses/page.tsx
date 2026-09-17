@@ -93,7 +93,14 @@ export default function ExpensesPage() {
     listExpenses(ownerId)
       .then((data) => { if (!ignore) { setExpenses(data); setLoading(false); } })
       .catch((e) => { if (!ignore) { setError(e instanceof Error ? e.message : "Failed to load expenses"); setLoading(false); } });
-    return () => { ignore = true; };
+
+    const handleRefetch = () => refetch();
+    window.addEventListener("dc-finance:refetch", handleRefetch);
+
+    return () => {
+      ignore = true;
+      window.removeEventListener("dc-finance:refetch", handleRefetch);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings, ownerId]);
 

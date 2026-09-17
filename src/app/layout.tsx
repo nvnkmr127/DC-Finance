@@ -6,6 +6,7 @@ import { Topbar } from "@/components/topbar";
 import { Toaster } from "@/components/ui/sonner";
 import { AiAssistant } from "@/components/ai-assistant";
 import { CommandPalette } from "@/components/command-palette";
+import { QuickAddFab } from "@/components/quick-add-fab";
 import { RoleGuard } from "@/components/role";
 import { SettingsProvider } from "@/components/settings-provider";
 import { ThemeProvider } from "@/components/theme-provider";
@@ -56,6 +57,7 @@ export default function RootLayout({
             </div>
             <RoleGuard />
             <AiAssistant />
+            <QuickAddFab />
             <CommandPalette />
             <Toaster />
           </SettingsProvider>
