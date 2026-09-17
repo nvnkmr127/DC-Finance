@@ -35,6 +35,7 @@ import {
   invoiceTotal,
   lineAmount,
   calculateGstBreakdown,
+  addDaysToDate,
   type InvoiceInput,
   type InvoiceItemInput,
   type InvoiceSummary,
@@ -49,7 +50,7 @@ const emptyItem = (): InvoiceItemInput => ({ description: "", quantity: 1, unit_
 const emptyValues = (): InvoiceInput => ({
   client_id: "",
   issue_date: today(),
-  due_date: inDays(30),
+  due_date: inDays(10),
   status: "draft",
   notes: "",
   is_gst_invoice: false,
@@ -195,7 +196,18 @@ export function InvoiceForm({
 
             <div className="grid gap-4 sm:grid-cols-3">
               <Field label="Issue Date" htmlFor="issue_date" required error={errors.issue_date?.message}>
-                <Input id="issue_date" type="date" {...register("issue_date")} />
+                <Input
+                  id="issue_date"
+                  type="date"
+                  {...register("issue_date", {
+                    onChange: (e) => {
+                      const val = e.target.value;
+                      if (val) {
+                        setValue("due_date", addDaysToDate(val, 10));
+                      }
+                    },
+                  })}
+                />
               </Field>
               <Field label="Due Date" htmlFor="due_date" required error={errors.due_date?.message}>
                 <Input id="due_date" type="date" {...register("due_date")} />

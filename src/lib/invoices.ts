@@ -267,6 +267,18 @@ export async function getInvoiceItems(invoiceId: string): Promise<InvoiceItem[]>
   return data as InvoiceItem[];
 }
 
+export function addDaysToDate(dateStr: string, days = 10): string {
+  if (!dateStr) {
+    return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+  }
+  const d = new Date(dateStr + "T00:00:00");
+  if (isNaN(d.getTime())) {
+    return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+  }
+  d.setDate(d.getDate() + days);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export async function createInvoice(input: InvoiceInput): Promise<void> {
   const supabase = getSupabase();
   const invoice_number = await nextInvoiceNumber();
@@ -282,7 +294,7 @@ export async function createInvoice(input: InvoiceInput): Promise<void> {
       invoice_number,
       client_id: input.client_id,
       issue_date: input.issue_date,
-      due_date: input.due_date,
+      due_date: input.due_date || addDaysToDate(input.issue_date, 10),
       status: input.status,
       notes: input.notes,
       is_gst_invoice,
@@ -334,7 +346,7 @@ export async function createInvoice(input: InvoiceInput): Promise<void> {
 export async function generateInvoicesForMonth(
   month: string,
   clients: { id: string; service: string; monthly_value: number; billing_cycle: BillingCycle; status: string }[],
-  dueDays = 7,
+  dueDays = 10,
 ): Promise<{ created: number; skipped: number }> {
   const shiftMonth = (ym: string, n: number) => {
     const [y, m] = ym.split("-").map(Number);
