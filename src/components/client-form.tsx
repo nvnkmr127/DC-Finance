@@ -46,6 +46,9 @@ const empty: ClientInput = {
   monthly_value: 0,
   billing_cycle: "monthly",
   status: "active",
+  contract_start_date: "",
+  contract_end_date: "",
+  contract_terms: "",
   notes: "",
   gstin: "",
   state: "",
@@ -254,6 +257,18 @@ export function ClientForm({
 
             <Field label="Billing Address" htmlFor="address" error={errors.address?.message} className="sm:col-span-2">
               <Input id="address" {...register("address")} placeholder="Client billing street address, city, state & pincode" />
+            </Field>
+
+            <Field label="Contract Start Date" htmlFor="contract_start_date" error={errors.contract_start_date?.message}>
+              <Input id="contract_start_date" type="date" {...register("contract_start_date")} />
+            </Field>
+
+            <Field label="Contract End / Renewal Date" htmlFor="contract_end_date" error={errors.contract_end_date?.message}>
+              <Input id="contract_end_date" type="date" {...register("contract_end_date")} />
+            </Field>
+
+            <Field label="Contract Terms / Deliverables" htmlFor="contract_terms" error={errors.contract_terms?.message} className="sm:col-span-2">
+              <Input id="contract_terms" {...register("contract_terms")} placeholder="E.g. 12-month retainer, 40 hrs/month, 30-day exit clause" />
             </Field>
 
             <Field label="Notes" htmlFor="notes" error={errors.notes?.message} className="sm:col-span-2">

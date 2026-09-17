@@ -22,6 +22,7 @@ import { listExpenses, type Expense } from "@/lib/expenses";
 import { listSalaryPayments, netSalary, type SalaryPayment, listEmployees, type Employee } from "@/lib/salaries";
 import { listClients, monthlyEquivalent, type ClientSummary } from "@/lib/clients";
 import { getOpeningBalance, setOpeningBalance, downloadCSV } from "@/lib/statements";
+import { getPredictiveRunway } from "@/lib/runway";
 import { formatDate } from "@/lib/format";
 import { useSettings } from "@/components/settings-provider";
 import { cn } from "@/lib/utils";
@@ -41,6 +42,7 @@ export default function StatementsPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [clients, setClients] = useState<ClientSummary[]>([]);
   const [openingBalance, setOpeningBalanceState] = useState<number | null>(null);
+  const [runwayData, setRunwayData] = useState<Awaited<ReturnType<typeof getPredictiveRunway>> | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,13 +68,14 @@ export default function StatementsPage() {
       setLoading(true);
       setError(null);
       try {
-        const [p, e, s, emp, c, ob] = await Promise.all([
+        const [p, e, s, emp, c, ob, rw] = await Promise.all([
           listPayments(),
           listExpenses(),
           listSalaryPayments(),
           listEmployees(),
           listClients(),
           getOpeningBalance(month),
+          getPredictiveRunway(3),
         ]);
         setPayments(p);
         setExpenses(e);
@@ -81,6 +84,7 @@ export default function StatementsPage() {
         setClients(c);
         setOpeningBalanceState(ob);
         setBalanceInput(ob?.toString() ?? "");
+        setRunwayData(rw);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Failed to load statements");
       } finally {
@@ -363,7 +367,102 @@ export default function StatementsPage() {
             <TabsTrigger value="client">Client Outstanding</TabsTrigger>
             <TabsTrigger value="salary">Salary</TabsTrigger>
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
+            <TabsTrigger value="runway">3-Month Runway</TabsTrigger>
           </TabsList>
+
+          {/* 3-Month Predictive Cash Runway */}
+          <TabsContent value="runway" className="print:block space-y-6">
+            {runwayData && (
+              <>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-xs font-medium text-muted-foreground">Current Starting Cash</p>
+                      <p className="mt-1 text-xl font-bold">{formatCurrency(runwayData.currentBalance)}</p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-xs font-medium text-muted-foreground">Monthly Recurring Revenue (MRR)</p>
+                      <p className="mt-1 text-xl font-bold text-emerald-600 dark:text-emerald-400">
+                        {formatCurrency(runwayData.totalMonthlyMRR)}
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-xs font-medium text-muted-foreground">Monthly Fixed Burn Rate</p>
+                      <p className="mt-1 text-xl font-bold text-rose-600 dark:text-rose-400">
+                        {formatCurrency(runwayData.totalMonthlyBurn)}
+                      </p>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="p-4">
+                      <p className="text-xs font-medium text-muted-foreground">Net Monthly Cash Flow</p>
+                      <p className={cn("mt-1 text-xl font-bold", runwayData.netMonthlyCashFlow >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
+                        {formatCurrency(runwayData.netMonthlyCashFlow)}
+                      </p>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Month</TableHead>
+                          <TableHead className="text-right">Starting Cash</TableHead>
+                          <TableHead className="text-right">Est. Inflow (MRR)</TableHead>
+                          <TableHead className="text-right">Salary Outflow</TableHead>
+                          <TableHead className="text-right">Recurring Outflow</TableHead>
+                          <TableHead className="text-right">Total Outflow</TableHead>
+                          <TableHead className="text-right">Net Cash Flow</TableHead>
+                          <TableHead className="text-right">Ending Cash</TableHead>
+                          <TableHead className="text-center">Runway Health</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {runwayData.projections.map((p) => (
+                          <TableRow key={p.month}>
+                            <TableCell className="font-medium">{p.monthLabel}</TableCell>
+                            <TableCell className="text-right">{formatCurrency(p.startingBalance)}</TableCell>
+                            <TableCell className="text-right text-emerald-600 dark:text-emerald-400 font-medium">
+                              +{formatCurrency(p.expectedInflow)}
+                            </TableCell>
+                            <TableCell className="text-right text-muted-foreground">
+                              -{formatCurrency(p.expectedSalaries)}
+                            </TableCell>
+                            <TableCell className="text-right text-muted-foreground">
+                              -{formatCurrency(p.expectedRecurringExpenses)}
+                            </TableCell>
+                            <TableCell className="text-right text-rose-600 dark:text-rose-400 font-medium">
+                              -{formatCurrency(p.totalOutflow)}
+                            </TableCell>
+                            <TableCell className={cn("text-right font-bold", p.netCashFlow >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-rose-600 dark:text-rose-400")}>
+                              {p.netCashFlow >= 0 ? "+" : ""}{formatCurrency(p.netCashFlow)}
+                            </TableCell>
+                            <TableCell className="text-right font-bold">{formatCurrency(p.endingBalance)}</TableCell>
+                            <TableCell className="text-center">
+                              <span className={cn(
+                                "inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold",
+                                p.status === "healthy" && "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300",
+                                p.status === "warning" && "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+                                p.status === "critical" && "bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300"
+                              )}>
+                                {p.status.toUpperCase()}
+                              </span>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </TabsContent>
 
           {/* Income Statement */}
           <TabsContent value="income" className="print:block">

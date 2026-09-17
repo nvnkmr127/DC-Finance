@@ -13,6 +13,9 @@ create table if not exists public.clients (
   monthly_value numeric not null default 0,  -- amount per billing cycle (see billing_cycle)
   billing_cycle text not null default 'monthly' check (billing_cycle in ('monthly', 'quarterly', 'commission')),
   status        text not null default 'active' check (status in ('active', 'inactive')),
+  contract_start_date date,
+  contract_end_date   date,
+  contract_terms      text,
   notes         text,
   created_at    timestamptz not null default now(),
   updated_at    timestamptz not null default now()

@@ -60,6 +60,7 @@ import {
   type ClientSummary,
 } from "@/lib/clients";
 import { formatINR } from "@/lib/format";
+import { getRetainerRenewalAlerts, type RetainerAlert } from "@/lib/runway";
 
 const PAGE_SIZE = 10;
 
@@ -73,6 +74,7 @@ const SORTS: Record<string, (a: ClientSummary, b: ClientSummary) => number> = {
 
 export default function ClientsPage() {
   const [rows, setRows] = useState<ClientSummary[]>([]);
+  const [retainerAlerts, setRetainerAlerts] = useState<RetainerAlert[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -86,7 +88,12 @@ export default function ClientsPage() {
     setLoading(true);
     setError(null);
     try {
-      setRows(await listClients());
+      const [clientsData, alertsData] = await Promise.all([
+        listClients(),
+        getRetainerRenewalAlerts(60),
+      ]);
+      setRows(clientsData);
+      setRetainerAlerts(alertsData);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load clients");
     } finally {
@@ -150,6 +157,51 @@ export default function ClientsPage() {
         description={loading ? "Loading…" : `${rows.length} clients`}
         action={<ClientForm showTrigger onSaved={refetch} />}
       />
+
+      {retainerAlerts.length > 0 && (
+        <Card className="border-amber-200 bg-amber-50/50 dark:border-amber-900/50 dark:bg-amber-950/20">
+          <CardContent className="p-4">
+            <div className="flex items-start gap-3">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600 dark:text-amber-500" />
+              <div className="flex-1 text-sm">
+                <p className="font-semibold text-amber-900 dark:text-amber-200">
+                  Retainer Renewal Alerts ({retainerAlerts.length} active contracts expiring soon)
+                </p>
+                <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {retainerAlerts.map((alert) => (
+                    <div
+                      key={alert.client.id}
+                      className="flex items-center justify-between rounded-md border border-amber-200/80 bg-background p-2.5 dark:border-amber-800/40"
+                    >
+                      <div>
+                        <Link
+                          href={`/clients/${alert.client.id}`}
+                          className="font-medium hover:underline text-foreground"
+                        >
+                          {alert.client.name} ({alert.client.company})
+                        </Link>
+                        <p className="text-xs text-muted-foreground">
+                          {alert.daysRemaining < 0
+                            ? `Expired ${Math.abs(alert.daysRemaining)} days ago`
+                            : `Expires in ${alert.daysRemaining} days (${alert.client.contract_end_date})`}
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setEditing(alert.client)}
+                        className="h-7 text-xs"
+                      >
+                        Renew / Edit
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <div className="relative sm:max-w-xs sm:flex-1">
