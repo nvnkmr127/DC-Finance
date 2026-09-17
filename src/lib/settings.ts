@@ -8,6 +8,11 @@ export type Settings = {
   company_state?: string | null;
   company_address?: string | null;
   company_pan?: string | null;
+  bank_name?: string | null;
+  account_number?: string | null;
+  ifsc_code?: string | null;
+  upi_id?: string | null;
+  bank_branch?: string | null;
   default_currency: string;
   financial_year_start: string;
   expense_categories: string[];
@@ -34,6 +39,11 @@ export async function getSettings(): Promise<Settings> {
       company_state: "Telangana",
       company_address: null,
       company_pan: null,
+      bank_name: null,
+      account_number: null,
+      ifsc_code: null,
+      upi_id: null,
+      bank_branch: null,
       default_currency: "INR",
       financial_year_start: "04-01",
       expense_categories: ["Office", "Software", "Advertising", "Equipment", "Travel", "Internet", "Electricity", "Freelancers", "Salary", "Other"],

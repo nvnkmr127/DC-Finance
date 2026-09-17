@@ -28,6 +28,13 @@ export default function SettingsPage() {
   const [companyState, setCompanyState] = useState("Telangana");
   const [companyAddress, setCompanyAddress] = useState("");
   const [companyPan, setCompanyPan] = useState("");
+
+  const [bankName, setBankName] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [ifscCode, setIfscCode] = useState("");
+  const [upiId, setUpiId] = useState("");
+  const [bankBranch, setBankBranch] = useState("");
+
   const [currency, setCurrency] = useState("INR");
   const [fyStart, setFyStart] = useState("04-01");
 
@@ -100,6 +107,11 @@ export default function SettingsPage() {
       setCompanyState(settings.company_state ?? "Telangana");
       setCompanyAddress(settings.company_address ?? "");
       setCompanyPan(settings.company_pan ?? "");
+      setBankName(settings.bank_name ?? "");
+      setAccountNumber(settings.account_number ?? "");
+      setIfscCode(settings.ifsc_code ?? "");
+      setUpiId(settings.upi_id ?? "");
+      setBankBranch(settings.bank_branch ?? "");
       setCurrency(settings.default_currency);
       setFyStart(settings.financial_year_start);
       setCategories([...settings.expense_categories]);
@@ -225,6 +237,11 @@ export default function SettingsPage() {
         company_state: companyState.trim() || "Telangana",
         company_address: companyAddress.trim() || null,
         company_pan: companyPan.trim() || null,
+        bank_name: bankName.trim() || null,
+        account_number: accountNumber.trim() || null,
+        ifsc_code: ifscCode.trim() || null,
+        upi_id: upiId.trim() || null,
+        bank_branch: bankBranch.trim() || null,
         default_currency: currency,
         financial_year_start: fyStart.trim() || "04-01",
         expense_categories: categories,
@@ -334,6 +351,60 @@ export default function SettingsPage() {
                 onChange={(e) => setCompanyAddress(e.target.value)}
                 placeholder="Plot No. 12, Hitech City, Hyderabad, Telangana 500081"
               />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Bank & Remittance Details Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Bank & Remittance Details</CardTitle>
+            <CardDescription>Bank account info printed on invoices for direct client payments.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label>Bank Name</Label>
+              <Input
+                value={bankName}
+                onChange={(e) => setBankName(e.target.value)}
+                placeholder="E.g. HDFC Bank / ICICI Bank"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Account Number</Label>
+                <Input
+                  value={accountNumber}
+                  onChange={(e) => setAccountNumber(e.target.value)}
+                  placeholder="50200012345678"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>IFSC Code</Label>
+                <Input
+                  value={ifscCode}
+                  onChange={(e) => setIfscCode(e.target.value.toUpperCase())}
+                  placeholder="HDFC0001234"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>UPI ID (optional)</Label>
+                <Input
+                  value={upiId}
+                  onChange={(e) => setUpiId(e.target.value)}
+                  placeholder="company@upi"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Branch Name</Label>
+                <Input
+                  value={bankBranch}
+                  onChange={(e) => setBankBranch(e.target.value)}
+                  placeholder="Hitech City, Hyderabad"
+                />
+              </div>
             </div>
           </CardContent>
         </Card>

@@ -156,17 +156,35 @@
     background: transparent;
   }
 }
-/* Print: hide app chrome (sidebar/topbar/controls) and print on white. */
+/* Print: exact A4 page formatting, hide app chrome (sidebar/header/toolbar) */
 @media print {
-  .print-hide {
+  @page {
+    size: A4 portrait;
+    margin: 12mm 15mm;
+  }
+  .print-hide,
+  aside,
+  header,
+  nav,
+  [data-slot="sidebar"] {
     display: none !important;
   }
-  body {
-    background: white !important;
-  }
+  body,
+  html,
   main {
+    background: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
     padding: 0 !important;
-    background: white !important;
+    box-shadow: none !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  table,
+  tr,
+  td,
+  th {
+    page-break-inside: avoid;
   }
 }
 

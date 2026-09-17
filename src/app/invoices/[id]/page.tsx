@@ -74,9 +74,15 @@ export default function InvoiceDetailPage() {
   const isTaxInclusive = invoice.is_tax_inclusive ?? false;
   const gstRate = invoice.gst_rate ?? 18;
   const clientState = invoice.client_state || companyState;
-
   const gst = calculateGstBreakdown(rawItemsTotal, isGst, gstRate, isTaxInclusive, companyState, clientState);
   const grandTotal = isGst ? gst.grandTotal : (invoice.total || rawItemsTotal);
+
+  const bankName = settings?.bank_name;
+  const accountNumber = settings?.account_number;
+  const ifscCode = settings?.ifsc_code;
+  const upiId = settings?.upi_id;
+  const bankBranch = settings?.bank_branch;
+  const hasBankDetails = Boolean(bankName || accountNumber || ifscCode || upiId);
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -95,7 +101,7 @@ export default function InvoiceDetailPage() {
       </div>
 
       {/* Invoice document */}
-      <div className="rounded-lg border bg-card p-8 print:border-0 print:p-0 space-y-6">
+      <div className="rounded-lg border bg-card p-8 print:border-0 print:p-0 print:shadow-none space-y-6">
         {/* Header */}
         <div className="flex items-start justify-between gap-4 border-b pb-6">
           <div>
@@ -116,7 +122,7 @@ export default function InvoiceDetailPage() {
           </div>
           <div className="text-right">
             <p className="text-xl font-bold">{invoice.invoice_number}</p>
-            <div className="mt-1">
+            <div className="mt-1 print-hide">
               <StatusBadge status={invoice.display_status} />
             </div>
             <div className="mt-3 text-xs text-muted-foreground space-y-1">
@@ -127,11 +133,11 @@ export default function InvoiceDetailPage() {
         </div>
 
         {/* Bill To Details */}
-        <div className="grid grid-cols-2 gap-4 text-sm bg-muted/20 rounded-md p-4">
+        <div className="grid grid-cols-2 gap-4 text-sm bg-muted/20 rounded-md p-4 print:bg-gray-50 print:border">
           <div>
             <p className="text-xs uppercase font-semibold tracking-wider text-muted-foreground">BILLED TO</p>
             <p className="mt-1 font-bold text-base">{invoice.client_name}</p>
-            <p className="font-medium text-muted-foreground">{invoice.client_company}</p>
+            {invoice.client_company && <p className="font-medium text-muted-foreground">{invoice.client_company}</p>}
             {invoice.client_address && (
               <p className="mt-1 text-xs text-muted-foreground max-w-xs whitespace-pre-wrap">{invoice.client_address}</p>
             )}
@@ -176,7 +182,7 @@ export default function InvoiceDetailPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start gap-4 border-t pt-4">
           <div className="text-xs space-y-1.5 max-w-sm">
             <p className="font-semibold text-muted-foreground uppercase tracking-wider">AMOUNT IN WORDS</p>
-            <p className="font-medium text-foreground italic bg-muted/40 p-2.5 rounded-md border">
+            <p className="font-medium text-foreground italic bg-muted/40 p-2.5 rounded-md border print:bg-gray-50">
               {numberToIndianWords(grandTotal)}
             </p>
           </div>
@@ -224,12 +230,41 @@ export default function InvoiceDetailPage() {
           </div>
         </div>
 
+        {/* Bank Details & Authorized Signatory */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-t pt-6">
+          {hasBankDetails ? (
+            <div className="text-xs space-y-1 bg-muted/20 p-3.5 rounded-md border print:bg-gray-50">
+              <p className="font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">BANK REMITTANCE DETAILS</p>
+              {bankName && <p><span className="font-medium text-foreground">Bank:</span> {bankName}</p>}
+              {accountNumber && <p><span className="font-medium text-foreground">Account No:</span> {accountNumber}</p>}
+              {ifscCode && <p><span className="font-medium text-foreground">IFSC Code:</span> {ifscCode}</p>}
+              {bankBranch && <p><span className="font-medium text-foreground">Branch:</span> {bankBranch}</p>}
+              {upiId && <p><span className="font-medium text-foreground">UPI ID / VPA:</span> {upiId}</p>}
+            </div>
+          ) : (
+            <div />
+          )}
+
+          <div className="flex flex-col items-end justify-between text-right text-xs pt-2">
+            <p className="font-semibold text-foreground">For {company}</p>
+            <div className="h-12" /> {/* Space for signature/stamp */}
+            <p className="border-t border-muted-foreground/40 pt-1 font-medium text-muted-foreground w-40 text-center">
+              Authorized Signatory
+            </p>
+          </div>
+        </div>
+
         {invoice.notes && (
           <div className="border-t pt-4 text-xs">
             <p className="font-semibold uppercase tracking-wider text-muted-foreground">TERMS & NOTES</p>
             <p className="mt-1 whitespace-pre-wrap text-muted-foreground leading-relaxed">{invoice.notes}</p>
           </div>
         )}
+
+        {/* Footer Disclaimer */}
+        <div className="border-t pt-4 text-center text-[10px] text-muted-foreground">
+          This is a computer-generated tax invoice and requires no physical signature when transmitted electronically.
+        </div>
       </div>
     </div>
   );
