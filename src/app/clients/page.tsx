@@ -272,6 +272,7 @@ export default function ClientsPage() {
               <TableHead className="text-right">Monthly Value</TableHead>
               <TableHead className="text-right">Total Received</TableHead>
               <TableHead className="text-right">Outstanding</TableHead>
+              <TableHead>Payment Health</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-10" />
             </TableRow>
@@ -279,13 +280,13 @@ export default function ClientsPage() {
           <TableBody>
             {loading ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-32 text-center">
+                <TableCell colSpan={9} className="h-32 text-center">
                   <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
                 </TableCell>
               </TableRow>
             ) : paged.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="h-32 text-center text-sm text-muted-foreground">
+                <TableCell colSpan={9} className="h-32 text-center text-sm text-muted-foreground">
                   {rows.length === 0 ? "No clients yet" : "No results found"}
                 </TableCell>
               </TableRow>
@@ -322,6 +323,21 @@ export default function ClientsPage() {
                       </span>
                     ) : (
                       <span className="text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {c.outstanding === 0 ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 text-[11px] font-medium text-emerald-600 dark:text-emerald-400" title="Clean record · Low credit risk · Standard net-30 terms">
+                        A · Prompt
+                      </span>
+                    ) : c.outstanding <= (c.monthly_value || 10000) ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[11px] font-medium text-amber-600 dark:text-amber-400" title="1 cycle pending · Standard milestone terms">
+                        B · Regular
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-red-500/30 bg-red-500/10 px-2 py-0.5 text-[11px] font-medium text-red-600 dark:text-red-400" title="High delay risk · Require 50% deposit before commencing">
+                        C · High Risk
+                      </span>
                     )}
                   </TableCell>
                   <TableCell>

@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Plus } from "lucide-react";
+import { Plus, Sparkles, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -66,6 +66,10 @@ export function ExpenseForm({
   showTrigger?: boolean;
 }) {
   const [internalOpen, setInternalOpen] = useState(false);
+  const [pasteBoxOpen, setPasteBoxOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [parsing, setParsing] = useState(false);
+
   const { settings } = useSettings();
   const expenseCategories = settings?.expense_categories || [];
   const paymentMethods = settings?.payment_methods || [];
@@ -78,11 +82,50 @@ export function ExpenseForm({
     handleSubmit,
     control,
     reset,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<ExpenseInput>({
     resolver: zodResolver(expenseSchema),
     defaultValues: empty,
   });
+
+  async function parseReceipt() {
+    if (!pasteText.trim()) return;
+    setParsing(true);
+    try {
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "parse_receipt",
+          receiptText: pasteText,
+          categories: expenseCategories,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.data) throw new Error(json.error || "Could not parse receipt");
+      const d = json.data;
+      if (d.vendor) setValue("vendor", d.vendor);
+      if (d.description) setValue("description", d.description);
+      if (d.amount) setValue("amount", Number(d.amount));
+      if (d.category) {
+        const match = expenseCategories.find((c) => c.toLowerCase() === d.category.toLowerCase());
+        if (match) setValue("category", match);
+      }
+      if (d.expense_date) setValue("expense_date", d.expense_date);
+      if (d.payment_method) {
+        const matchMethod = paymentMethods.find((m) => m.toLowerCase() === d.payment_method.toLowerCase());
+        if (matchMethod) setValue("payment_method", matchMethod);
+      }
+      toast.success("Details extracted by AI!");
+      setPasteBoxOpen(false);
+      setPasteText("");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to parse receipt");
+    } finally {
+      setParsing(false);
+    }
+  }
 
   useEffect(() => {
     if (isOpen) {
@@ -136,6 +179,47 @@ export function ExpenseForm({
             <DialogTitle>{expense ? "Edit Expense" : "Add Expense"}</DialogTitle>
             <DialogDescription>Record a business expense.</DialogDescription>
           </DialogHeader>
+
+          {!expense && (
+            <div className="mt-2 rounded-lg border border-dashed border-violet-500/40 bg-violet-50/50 p-2.5 dark:bg-violet-950/20">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 text-xs font-medium text-violet-700 dark:text-violet-300">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  <span>AI Bill & Receipt Auto-Fill</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-xs text-violet-600 hover:text-violet-800 dark:text-violet-400"
+                  onClick={() => setPasteBoxOpen((o) => !o)}
+                >
+                  {pasteBoxOpen ? "Hide" : "Paste Bill Text"}
+                </Button>
+              </div>
+              {pasteBoxOpen && (
+                <div className="mt-2 space-y-2">
+                  <Textarea
+                    placeholder="Paste receipt email text, SMS confirmation, or bill details here..."
+                    value={pasteText}
+                    onChange={(e) => setPasteText(e.target.value)}
+                    rows={3}
+                    className="bg-background text-xs"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="w-full bg-violet-600 text-xs text-white hover:bg-violet-700"
+                    onClick={parseReceipt}
+                    disabled={parsing || !pasteText.trim()}
+                  >
+                    {parsing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <Sparkles className="mr-1.5 h-3.5 w-3.5" />}
+                    Extract & Auto-Fill Form
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="grid gap-4 py-4">
             <Field label="Category" htmlFor="category" required error={errors.category?.message}>

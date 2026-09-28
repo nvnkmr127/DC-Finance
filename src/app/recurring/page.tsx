@@ -12,7 +12,10 @@ import {
   AlertCircle,
   Receipt,
   RotateCw,
+  Sparkles,
+  Copy,
 } from "lucide-react";
+import { RichText } from "@/components/rich-text";
 import { toast } from "sonner";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -102,6 +105,39 @@ export default function RecurringPage() {
   const [recording, setRecording] = useState<Recurring | null>(null);
   const [recordDate, setRecordDate] = useState(todayStr());
   const [isRecordingSubmitting, setIsRecordingSubmitting] = useState(false);
+
+  const [auditOpen, setAuditOpen] = useState(false);
+  const [auditResult, setAuditResult] = useState("");
+  const [auditing, setAuditing] = useState(false);
+
+  async function runSubscriptionAudit() {
+    setAuditing(true);
+    try {
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "audit_subscriptions",
+          subscriptions: rows.filter((r) => r.active).map((r) => ({
+            name: r.name,
+            category: r.category,
+            amount: r.amount,
+            frequency: r.frequency,
+            vendor: r.vendor,
+            nextDate: r.next_payment_date,
+          })),
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.text) throw new Error(json.error || "Audit failed");
+      setAuditResult(json.text);
+      setAuditOpen(true);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to run audit");
+    } finally {
+      setAuditing(false);
+    }
+  }
 
   async function refetch() {
     setLoading(true);
@@ -235,7 +271,20 @@ export default function RecurringPage() {
       <PageHeader
         title="Recurring"
         description={loading ? "Loading…" : `${rows.length} recurring expenses`}
-        action={<RecurringForm showTrigger onSaved={refetch} />}
+        action={
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              onClick={runSubscriptionAudit}
+              disabled={auditing || rows.length === 0}
+              className="gap-1.5 border-violet-500/30 text-violet-600 hover:bg-violet-50 dark:hover:bg-violet-950/30"
+            >
+              {auditing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4 text-violet-600" />}
+              AI Prune & Audit
+            </Button>
+            <RecurringForm showTrigger onSaved={refetch} />
+          </div>
+        }
       />
 
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -634,6 +683,46 @@ export default function RecurringPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={auditOpen} onOpenChange={setAuditOpen}>
+        <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-violet-600" />
+              SaaS & Subscription Pruning Copilot
+            </DialogTitle>
+            <DialogDescription>
+              AI audit identifying redundant software, climbing subscriptions, and cost-cutting opportunities.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex-1 overflow-y-auto rounded-lg border bg-muted/30 p-4 text-sm">
+            <RichText text={auditResult} />
+          </div>
+
+          <DialogFooter className="flex flex-row justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(auditResult);
+                  toast.success("Audit report copied to clipboard");
+                } catch {
+                  toast.error("Couldn't copy report");
+                }
+              }}
+            >
+              <Copy className="h-4 w-4" />
+              Copy Report
+            </Button>
+            <Button type="button" size="sm" onClick={() => setAuditOpen(false)}>
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

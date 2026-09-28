@@ -131,7 +131,7 @@ export default function ReportsPage() {
       return { name: c.name, revenue: c.value, cost, profit: p, margin: c.value ? Math.round((p / c.value) * 100) : 0 };
     });
 
-    return { revenue, expenseTotal, salaryTotal, profit, margin, byClient, byCategory, byEmployee, byMethod, monthly, analytics, clientProfit };
+    return { revenue, expenseTotal, salaryTotal, profit, margin, byClient, byCategory, byEmployee, byMethod, monthly, analytics, clientProfit, pInRange, eInRange, sInRange };
   }, [payments, expenses, salaries, from, to, fy]);
 
   // Quick period presets. Custom leaves the date inputs for manual editing.
@@ -266,6 +266,29 @@ export default function ReportsPage() {
               expensesByCategory: r.byCategory,
               salariesByEmployee: r.byEmployee,
               paymentMethods: r.byMethod,
+              allPayments: r.pInRange.map((p) => ({
+                client: p.clients?.name ?? "Unknown",
+                amount: p.amount,
+                billingMonth: p.billing_month,
+                date: p.payment_date,
+                method: p.payment_method,
+                notes: p.notes || undefined,
+              })),
+              allExpenses: r.eInRange.map((e) => ({
+                category: e.category,
+                amount: e.amount,
+                date: e.expense_date,
+                vendor: e.vendor,
+                method: e.payment_method,
+                notes: e.notes || undefined,
+              })),
+              allSalaries: r.sInRange.map((s) => ({
+                employee: s.employees?.name ?? "Unknown",
+                month: s.salary_month,
+                amount: netSalary(s),
+                date: s.payment_date,
+                notes: s.notes || undefined,
+              })),
             }}
           />
 

@@ -1,10 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, AlertCircle, Copy, BellRing, CheckCircle2, Mail } from "lucide-react";
+import { Loader2, AlertCircle, Copy, BellRing, CheckCircle2, Mail, MessageSquare, Sparkles } from "lucide-react";
 import { toast } from "sonner";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Table,
   TableBody,
@@ -13,6 +15,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -43,11 +53,28 @@ const daysBetween = (isoDate: string) => {
 export default function CollectionsPage() {
   const [rows, setRows] = useState<InvoiceSummary[]>([]);
   const [emailByClient, setEmailByClient] = useState<Record<string, string>>({});
+  const [phoneByClient, setPhoneByClient] = useState<Record<string, string>>({});
   const [sendingId, setSendingId] = useState<string | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkSending, setBulkSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [waState, setWaState] = useState<{
+    open: boolean;
+    row: (InvoiceSummary & { overdueDays: number }) | null;
+    phone: string;
+    message: string;
+    tone: "gentle" | "professional" | "firm";
+    loading: boolean;
+  }>({
+    open: false,
+    row: null,
+    phone: "",
+    message: "",
+    tone: "gentle",
+    loading: false,
+  });
 
   const { formatCurrency, settings } = useSettings();
   const company = settings?.company_name || "our company";
@@ -61,6 +88,7 @@ export default function CollectionsPage() {
       const [inv, clients] = await Promise.all([listInvoices(), listClients()]);
       setRows(inv);
       setEmailByClient(Object.fromEntries(clients.map((c) => [c.id, c.email ?? ""])));
+      setPhoneByClient(Object.fromEntries(clients.map((c) => [c.id, c.phone ?? ""])));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load collections");
     } finally {
@@ -123,6 +151,61 @@ export default function CollectionsPage() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Failed to log reminder");
     }
+  }
+
+  async function openWhatsAppDraft(r: InvoiceSummary & { overdueDays: number }, forcedTone?: "gentle" | "professional" | "firm") {
+    const tone = forcedTone || (r.overdueDays > 30 ? "firm" : r.overdueDays > 7 ? "professional" : "gentle");
+    const phone = phoneByClient[r.client_id] || "";
+    const fallback = reminderMessage(r);
+
+    setWaState({
+      open: true,
+      row: r,
+      phone,
+      message: fallback,
+      tone,
+      loading: true,
+    });
+
+    try {
+      const res = await fetch("/api/ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode: "draft_reminder",
+          draftDetails: {
+            clientName: r.client_name,
+            companyName: company,
+            invoiceNumber: r.invoice_number,
+            amount: formatCurrency(r.balance),
+            dueDate: formatDate(r.due_date),
+            overdueDays: r.overdueDays,
+            tone,
+          },
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.text) {
+          setWaState((prev) => ({ ...prev, message: data.text, loading: false }));
+          return;
+        }
+      }
+    } catch {
+      // fallback already set
+    }
+    setWaState((prev) => ({ ...prev, loading: false }));
+  }
+
+  function launchWhatsApp() {
+    if (!waState.row) return;
+    const cleanPhone = waState.phone.replace(/[^0-9]/g, "");
+    const waPhone = cleanPhone.length === 10 ? `91${cleanPhone}` : cleanPhone;
+    const textParam = encodeURIComponent(waState.message);
+    const url = waPhone ? `https://wa.me/${waPhone}?text=${textParam}` : `https://wa.me/?text=${textParam}`;
+    window.open(url, "_blank");
+    markReminded(waState.row.id);
+    setWaState((prev) => ({ ...prev, open: false }));
   }
 
   async function sendEmail(r: InvoiceSummary & { overdueDays: number }) {
@@ -268,6 +351,16 @@ export default function CollectionsPage() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openWhatsAppDraft(r)}
+                        title="Draft & send WhatsApp reminder with AI"
+                        className="border-emerald-600/30 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                      >
+                        <MessageSquare className="h-4 w-4" />
+                        WhatsApp
+                      </Button>
                       {emailEnabled && (
                         <Button
                           variant="outline"
@@ -307,8 +400,8 @@ export default function CollectionsPage() {
 
       <p className="text-xs text-muted-foreground">
         {emailEnabled
-          ? "Email sends directly via Resend to the client’s email. You can also copy the message to send manually."
-          : "Copy a reminder message to send via email or WhatsApp, then log it here. Turn on email reminders in Settings to send directly via Resend."}
+          ? "Send directly via Resend email or 1-click WhatsApp with AI-drafted messages, or copy to send manually."
+          : "Draft & send via WhatsApp with AI, or copy reminder messages to send manually. Turn on email reminders in Settings to send via Resend."}
       </p>
 
       <AlertDialog open={bulkOpen} onOpenChange={(o) => !o && !bulkSending && setBulkOpen(false)}>
@@ -347,6 +440,132 @@ export default function CollectionsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={waState.open} onOpenChange={(o) => setWaState((prev) => ({ ...prev, open: o }))}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MessageSquare className="h-5 w-5 text-emerald-600" />
+              WhatsApp Payment Reminder
+            </DialogTitle>
+            <DialogDescription>
+              AI-crafted payment nudge ready to review, tweak, and send directly via WhatsApp.
+            </DialogDescription>
+          </DialogHeader>
+
+          {waState.row && (
+            <div className="space-y-4 py-2">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-muted/40 p-3 text-xs">
+                <div>
+                  <span className="font-semibold text-foreground">{waState.row.client_name}</span>
+                  <span className="text-muted-foreground"> ({waState.row.client_company})</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-medium">{waState.row.invoice_number}</span>
+                  <span className="font-bold text-foreground">{formatCurrency(waState.row.balance)}</span>
+                  {waState.row.overdueDays > 0 ? (
+                    <span className="rounded bg-red-100 px-1.5 py-0.5 font-medium text-red-700 dark:bg-red-950/50 dark:text-red-300">
+                      {waState.row.overdueDays}d overdue
+                    </span>
+                  ) : (
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-muted-foreground">Not due yet</span>
+                  )}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Client WhatsApp / Mobile Number</label>
+                <Input
+                  value={waState.phone}
+                  onChange={(e) => setWaState((prev) => ({ ...prev, phone: e.target.value }))}
+                  placeholder="e.g. 9876543210 or +91..."
+                />
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-muted-foreground">Message Tone</label>
+                  <div className="flex items-center gap-1">
+                    {(["gentle", "professional", "firm"] as const).map((t) => (
+                      <Button
+                        key={t}
+                        type="button"
+                        size="sm"
+                        variant={waState.tone === t ? "default" : "outline"}
+                        className="h-7 capitalize text-xs"
+                        disabled={waState.loading}
+                        onClick={() => openWhatsAppDraft(waState.row!, t)}
+                      >
+                        {waState.tone === t && waState.loading ? (
+                          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                        ) : null}
+                        {t}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="relative">
+                  <Textarea
+                    value={waState.message}
+                    onChange={(e) => setWaState((prev) => ({ ...prev, message: e.target.value }))}
+                    rows={5}
+                    className="resize-none font-sans text-sm"
+                    placeholder="Draft reminder message..."
+                  />
+                  {waState.loading && (
+                    <div className="absolute inset-0 flex items-center justify-center rounded-lg bg-background/60 backdrop-blur-xs">
+                      <div className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                        <Sparkles className="h-4 w-4 animate-pulse text-emerald-600" />
+                        Drafting message with AI...
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={async () => {
+                try {
+                  await navigator.clipboard.writeText(waState.message);
+                  toast.success("Message copied to clipboard");
+                } catch {
+                  toast.error("Couldn't copy message");
+                }
+              }}
+            >
+              <Copy className="h-4 w-4" />
+              Copy
+            </Button>
+
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setWaState((prev) => ({ ...prev, open: false }))}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                className="bg-emerald-600 text-white hover:bg-emerald-700"
+                onClick={launchWhatsApp}
+              >
+                <MessageSquare className="h-4 w-4" />
+                Send via WhatsApp
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

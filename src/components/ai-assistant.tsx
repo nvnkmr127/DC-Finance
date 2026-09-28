@@ -72,16 +72,77 @@ async function buildSnapshot(fyStart: string) {
   const fyExpenses = expenses.filter((e) => inFy(e.expense_date)).reduce((s, e) => s + e.amount, 0);
   const fySalaries = salaries.filter((p) => inFyMonth(p.salary_month)).reduce((s, p) => s + netSalary(p), 0);
 
+  const clientsWithOutstanding = clients
+    .map((c) => ({
+      name: c.name,
+      remaining: Math.max(monthlyEquivalent(c) - (receivedByClient.get(c.id) ?? 0), 0),
+    }))
+    .filter((c) => c.remaining > 0)
+    .sort((a, b) => b.remaining - a.remaining)
+    .slice(0, 8);
+
+  const netProfit = revenueMonth - expensesMonth - salariesMonth;
+
   return {
     month,
-    thisMonth: { revenue: revenueMonth, expenses: expensesMonth, salaries: salariesMonth, netProfit: revenueMonth - expensesMonth - salariesMonth },
+    thisMonth: {
+      revenue: revenueMonth,
+      expenses: expensesMonth,
+      salaries: salariesMonth,
+      netProfit,
+      netMarginPct: revenueMonth > 0 ? Math.round((netProfit / revenueMonth) * 100) : null,
+    },
     financialYearToDate: { label: fy.label, revenue: fyRevenue, expenses: fyExpenses + fySalaries, netProfit: fyRevenue - fyExpenses - fySalaries },
     outstanding,
+    clientsWithOutstanding,
     pendingSalaries,
     recurringMonthly: recurring.filter((r) => r.active).reduce((s, r) => s + r.amount, 0),
     topClientsThisMonth: group(clientMap),
     expensesByCategoryThisMonth: group(catMap),
     counts: { clients: clients.length, employees: employees.length },
+    allPayments: payments.map((p) => ({
+      client: p.clients?.name ?? "Unknown",
+      amount: p.amount,
+      billingMonth: p.billing_month,
+      date: p.payment_date,
+      method: p.payment_method,
+      notes: p.notes || undefined,
+    })),
+    allExpenses: expenses.map((e) => ({
+      category: e.category,
+      amount: e.amount,
+      date: e.expense_date,
+      vendor: e.vendor,
+      method: e.payment_method,
+      notes: e.notes || undefined,
+    })),
+    allSalaries: salaries.map((s) => ({
+      employee: employees.find((emp) => emp.id === s.employee_id)?.name ?? "Unknown",
+      month: s.salary_month,
+      amount: netSalary(s),
+      date: s.payment_date,
+      notes: s.notes || undefined,
+    })),
+    allClients: clients.map((c) => ({
+      name: c.name,
+      status: c.status,
+      monthlyValue: monthlyEquivalent(c),
+      cycle: c.billing_cycle,
+    })),
+    allEmployees: employees.map((e) => ({
+      name: e.name,
+      designation: e.designation,
+      monthlySalary: e.salary,
+      status: e.status,
+    })),
+    allRecurring: recurring.map((r) => ({
+      name: r.name,
+      amount: r.amount,
+      frequency: r.frequency,
+      category: r.category,
+      active: r.active,
+      nextDate: r.next_payment_date,
+    })),
   };
 }
 
@@ -120,10 +181,11 @@ export function AiAssistant() {
   }, [messages, busy]);
 
   async function generate() {
-    if (!context) return;
     setLoadingInsights(true);
     try {
-      setInsights(await askAi({ mode: "insights", currency, context }));
+      const fresh = await buildSnapshot(fyStart);
+      setContext(fresh);
+      setInsights(await askAi({ mode: "insights", currency, context: fresh }));
     } catch (e) {
       setInsights(`⚠️ ${e instanceof Error ? e.message : "Failed"}`);
     } finally {
@@ -133,13 +195,15 @@ export function AiAssistant() {
 
   async function send() {
     const q = input.trim();
-    if (!q || busy || !context) return;
+    if (!q || busy) return;
     const next = [...messages, { role: "user" as const, content: q }];
     setMessages(next);
     setInput("");
     setBusy(true);
     try {
-      const reply = await askAi({ mode: "chat", currency, context, messages: next });
+      const currentCtx = context ?? (await buildSnapshot(fyStart));
+      if (!context) setContext(currentCtx);
+      const reply = await askAi({ mode: "chat", currency, context: currentCtx, messages: next });
       setMessages([...next, { role: "assistant", content: reply }]);
     } catch (e) {
       setMessages([...next, { role: "assistant", content: `⚠️ ${e instanceof Error ? e.message : "Failed"}` }]);

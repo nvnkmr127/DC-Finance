@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   TrendingUp,
   TrendingDown,
@@ -13,6 +14,10 @@ import {
   AlertCircle,
   SlidersHorizontal,
   RotateCcw,
+  ShieldAlert,
+  ShieldCheck,
+  AlertTriangle,
+  ArrowRight,
 } from "lucide-react";
 import {
   Card,
@@ -312,6 +317,66 @@ export default function DashboardPage() {
       .map((b) => ({ category: b.category, budget: b.amount, actual: actualByCat.get(b.category) ?? 0 }))
       .sort((a, b) => b.actual - a.actual);
 
+    // Anomaly detection
+    const anomalies: { id: string; type: "duplicate" | "surge"; title: string; detail: string; severity: "warning" | "danger" }[] = [];
+    const sortedExpenses = [...expenses].sort((a, b) => new Date(a.expense_date).getTime() - new Date(b.expense_date).getTime());
+    for (let i = 0; i < sortedExpenses.length; i++) {
+      for (let j = i + 1; j < sortedExpenses.length; j++) {
+        const e1 = sortedExpenses[i];
+        const e2 = sortedExpenses[j];
+        const diffDays = Math.abs(new Date(e2.expense_date).getTime() - new Date(e1.expense_date).getTime()) / 86400000;
+        if (diffDays > 7) break;
+        if (
+          e1.vendor &&
+          e2.vendor &&
+          e1.vendor.trim().toLowerCase() === e2.vendor.trim().toLowerCase() &&
+          e1.amount === e2.amount
+        ) {
+          anomalies.push({
+            id: `dup-${e1.id}-${e2.id}`,
+            type: "duplicate",
+            title: `Potential Duplicate: ${e1.vendor}`,
+            detail: `Two charges of ₹${e1.amount.toLocaleString("en-IN")} recorded on ${formatDate(e1.expense_date)} and ${formatDate(e2.expense_date)}.`,
+            severity: "danger",
+          });
+        }
+      }
+    }
+
+    const recent2Months = months.slice(-3, -1);
+    if (recent2Months.length >= 2) {
+      for (const cat of categories) {
+        const pastAvg = recent2Months.reduce((s, m) => {
+          const pastCat = expenses.filter(e => ym(e.expense_date) === m.month && e.category === cat.name).reduce((sum, e) => sum + e.amount, 0);
+          return s + pastCat;
+        }, 0) / recent2Months.length;
+        if (pastAvg > 0 && cat.value > pastAvg * 1.4 && cat.value - pastAvg > 5000) {
+          anomalies.push({
+            id: `surge-${cat.name}`,
+            type: "surge",
+            title: `Spend Surge in ${cat.name}`,
+            detail: `Current spend (₹${cat.value.toLocaleString("en-IN")}) is ${Math.round(((cat.value - pastAvg) / pastAvg) * 100)}% above 2-month average (₹${Math.round(pastAvg).toLocaleString("en-IN")}).`,
+            severity: "warning",
+          });
+        }
+      }
+    }
+
+    // 30-Day Cashflow Radar
+    const pendingSalariesTotal = pendingSalaries.reduce((s, p) => s + p.remaining, 0);
+    const upcomingRecurringTotal = upcoming.reduce((s, r) => s + r.amount, 0);
+    const committedOutflows30d = pendingSalariesTotal + upcomingRecurringTotal;
+    const safeCushion = cashBalance - committedOutflows30d;
+    const radarStatus = safeCushion > 50000 ? "safe" : safeCushion >= 0 ? "tight" : "risk";
+    const radar = {
+      pendingSalariesTotal,
+      upcomingRecurringTotal,
+      committedOutflows30d,
+      safeCushion,
+      radarStatus,
+      expectedReceivables30d: outstanding,
+    };
+
     return {
       selected,
       deltas,
@@ -329,6 +394,8 @@ export default function DashboardPage() {
       pendingSalaries,
       recentPayments: payments.slice(0, 5),
       recentExpenses: expenses.slice(0, 5),
+      anomalies,
+      radar,
     };
   }, [payments, expenses, salaries, employees, clients, recurring, budgets, openingBalance, month, fyStart, overrideRevenue, overrideCost, forecastDuration]);
 
@@ -358,6 +425,49 @@ export default function DashboardPage() {
     expensesByCategory: d.categories,
     monthlyTrend: d.months.map((m) => ({ month: m.month, revenue: m.revenue, expenses: m.totalExpenses, profit: m.profit })),
     cashFlowForecast: { expectedMonthlyRevenue: d.fc.expectedRevenue, expectedMonthlyCost: d.fc.expectedCost, netPerMonth: d.fc.netPerMonth, runwayMonths: d.fc.runwayMonths, projected: d.fc.forecast },
+    allPayments: payments.map((p) => ({
+      client: p.clients?.name ?? "Unknown",
+      amount: p.amount,
+      billingMonth: p.billing_month,
+      date: p.payment_date,
+      method: p.payment_method,
+      notes: p.notes || undefined,
+    })),
+    allExpenses: expenses.map((e) => ({
+      category: e.category,
+      amount: e.amount,
+      date: e.expense_date,
+      vendor: e.vendor,
+      method: e.payment_method,
+      notes: e.notes || undefined,
+    })),
+    allSalaries: salaries.map((s) => ({
+      employee: employees.find((emp) => emp.id === s.employee_id)?.name ?? "Unknown",
+      month: s.salary_month,
+      amount: netSalary(s),
+      date: s.payment_date,
+      notes: s.notes || undefined,
+    })),
+    allClients: clients.map((c) => ({
+      name: c.name,
+      status: c.status,
+      monthlyValue: monthlyEquivalent(c),
+      cycle: c.billing_cycle,
+    })),
+    allEmployees: employees.map((e) => ({
+      name: e.name,
+      designation: e.designation,
+      monthlySalary: e.salary,
+      status: e.status,
+    })),
+    allRecurring: recurring.map((r) => ({
+      name: r.name,
+      amount: r.amount,
+      frequency: r.frequency,
+      category: r.category,
+      active: r.active,
+      nextDate: r.next_payment_date,
+    })),
   };
 
   return (
@@ -394,6 +504,81 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
+          {/* 30-Day Cashflow Radar */}
+          <div className={cn(
+            "rounded-xl border p-4 shadow-xs transition-all",
+            d.radar.radarStatus === "safe"
+              ? "border-emerald-500/30 bg-emerald-50/40 dark:bg-emerald-950/15"
+              : d.radar.radarStatus === "tight"
+              ? "border-amber-500/30 bg-amber-50/40 dark:bg-amber-950/15"
+              : "border-red-500/30 bg-red-50/40 dark:bg-red-950/15"
+          )}>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className={cn(
+                  "mt-0.5 rounded-lg p-2",
+                  d.radar.radarStatus === "safe"
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300"
+                    : d.radar.radarStatus === "tight"
+                    ? "bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-300"
+                    : "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300"
+                )}>
+                  {d.radar.radarStatus === "safe" ? <ShieldCheck className="h-5 w-5" /> : <AlertTriangle className="h-5 w-5" />}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold">
+                      {d.radar.radarStatus === "safe" ? "30-Day Cashflow Radar: Safe Cushion" : d.radar.radarStatus === "tight" ? "30-Day Cashflow Radar: Tight Cushion" : "30-Day Cashflow Radar: Cash Deficit Alert"}
+                    </p>
+                    <Badge variant={d.radar.radarStatus === "safe" ? "secondary" : "destructive"} className="text-[10px] uppercase">
+                      {d.radar.radarStatus === "safe" ? "Surplus" : d.radar.radarStatus === "tight" ? "Tight" : "Cliff Risk"}
+                    </Badge>
+                  </div>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {d.radar.radarStatus === "safe"
+                      ? `Cash on hand (${formatCurrency(d.cashBalance)}) covers all upcoming payroll & recurring costs (${formatCurrency(d.radar.committedOutflows30d)}) with ${formatCurrency(d.radar.safeCushion)} net cushion.`
+                      : d.radar.radarStatus === "tight"
+                      ? `Thin safety margin: ${formatCurrency(d.radar.safeCushion)} cushion remaining after committed payroll (${formatCurrency(d.radar.pendingSalariesTotal)}) & recurring bills.`
+                      : `Committed payroll & subscriptions (${formatCurrency(d.radar.committedOutflows30d)}) exceed cash by ${formatCurrency(Math.abs(d.radar.safeCushion))}. Collect overdue receivables to maintain positive cash.`}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <div className="rounded-md border bg-background/80 px-2.5 py-1.5 text-right backdrop-blur-xs">
+                  <span className="text-[10px] text-muted-foreground block">Safe-to-Spend</span>
+                  <span className={cn("font-bold tabular-nums", d.radar.safeCushion >= 0 ? "text-foreground" : "text-red-600")}>
+                    {formatCurrency(Math.max(0, d.radar.safeCushion))}
+                  </span>
+                </div>
+                <Button asChild variant="outline" size="sm" className="h-8 text-xs bg-background">
+                  <Link href="/collections">
+                    Collections <ArrowRight className="ml-1 h-3 w-3" />
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Anomaly Sentinel */}
+          {d.anomalies.length > 0 && (
+            <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3.5 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-xs font-semibold text-amber-700 dark:text-amber-400">
+                  <ShieldAlert className="h-4 w-4" />
+                  <span>AI Sentinel: {d.anomalies.length} Anomaly Flag{d.anomalies.length === 1 ? "" : "s"}</span>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {d.anomalies.map((a) => (
+                  <div key={a.id} className="rounded-lg border bg-background/90 p-2.5 text-xs shadow-2xs">
+                    <p className="font-medium text-foreground">{a.title}</p>
+                    <p className="mt-0.5 text-muted-foreground">{a.detail}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
             <StatCard title="Revenue" value={d.selected.revenue} icon={TrendingUp} accent="positive" hint="Payments received" delta={d.deltas.revenue} />
             <StatCard title="Expenses" value={d.selected.expenses} icon={TrendingDown} accent="negative" hint="Business expenses" delta={d.deltas.expenses} invertDelta />
