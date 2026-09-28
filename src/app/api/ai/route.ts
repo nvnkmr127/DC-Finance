@@ -42,18 +42,21 @@ export async function POST(req: Request) {
   }
 
   const { mode, currency = "INR", context, messages } = body;
+  const currencySymbol = currency === "INR" ? "₹" : currency === "USD" ? "$" : currency === "EUR" ? "€" : currency === "GBP" ? "£" : currency;
 
   const instructions =
-    `You are an expert CFO and financial strategist for a small business. All currency amounts are in ${currency}.\n\n` +
+    `You are an expert CFO and financial strategist for a small business. All currency amounts are in ${currency} (${currencySymbol}).\n\n` +
+    `CRITICAL CURRENCY INSTRUCTION:\n` +
+    `- All monetary amounts MUST be formatted with the "${currencySymbol}" symbol (e.g. ${currencySymbol}25,000 or ${currencySymbol}1,50,000). NEVER use "$" (dollar sign) or "USD" under any circumstances unless explicitly asked.\n\n` +
     `CORE FINANCIAL METRICS & REASONING RULES:\n` +
     `- Net Profit = Revenue - (Expenses + Salaries). Net Margin % = (Net Profit / Revenue) * 100.\n` +
     `- Cash Runway = Cash Balance / Monthly Burn (when net profit/cashflow is negative). Always assess runway risk when cash balance is available.\n` +
     `- Outstanding / AR: Uncollected revenue from clients. Cite specific client names and exact amounts owed.\n` +
     `- Pending Salaries: Unpaid compensation liabilities owed to staff. Highlight immediate liquidity pressure.\n` +
     `- Budget Variance: Compare actual spend vs allocated budgets to flag specific cost leaks.\n` +
-    `- Grounding: Quote exact figures with ${currency}. Never hallucinate numbers. If data is missing or zero, note it as "no data" rather than guessing.\n\n` +
+    `- Grounding: Quote exact figures with ${currencySymbol}. Never hallucinate numbers. If data is missing or zero, note it as "no data" rather than guessing.\n\n` +
     `UPDATING RESULTS & SCENARIO ANALYSIS:\n` +
-    `- When asked "what if", recalculation, projection, or update questions (e.g. "what if we cut marketing?", "client X pays ₹Y", "hire a dev at ₹Z", "revenue falls 20%"):\n` +
+    `- When asked "what if", recalculation, projection, or update questions (e.g. "what if we cut marketing?", "client X pays ${currencySymbol}Y", "hire a dev at ${currencySymbol}Z", "revenue falls 20%"):\n` +
     `  1. Clearly calculate the updated figures step-by-step.\n` +
     `  2. Present a structured Before vs After summary (Baseline -> Updated -> Delta) for Revenue, Expenses, Net Profit, Margin %, and Runway.\n` +
     `  3. Give a 1-2 sentence strategic recommendation based on the change.\n\n` +
@@ -69,11 +72,11 @@ export async function POST(req: Request) {
         model: MODEL,
         instructions,
         prompt:
-          "Write a short daily financial briefing from the data. Structure it as:\n" +
+          `Write a short daily financial briefing from the data. Use "${currencySymbol}" for all amounts (never "$"). Structure it as:\n` +
           "- Health: one line — is the business up/down/flat this period and why, with the key number.\n" +
           "- Watch: the real concerns, each with its figure — thin/negative margin, category over budget, " +
           "overdue receivables (AR aging), pending salaries, low runway. Skip any that don't apply.\n" +
-          "- Do next: 2-3 specific, prioritized actions the owner should take now (e.g. 'chase ₹X overdue from Client Y', " +
+          `- Do next: 2-3 specific, prioritized actions the owner should take now (e.g. 'chase ${currencySymbol}X overdue from Client Y', ` +
           "'cut/renew recurring Z', 'invoice the 3 clients not yet billed this month'). Make them concrete and tied to the data.\n" +
           "Use plain '- ' bullets under those three bold labels. No preamble, no restating the whole dataset. " +
           "If there's essentially no activity yet, say that in one line instead of padding.",
@@ -96,7 +99,7 @@ export async function POST(req: Request) {
       const { text } = await generateText({
         model: MODEL,
         instructions:
-          "You are a polite, effective business communication assistant drafting WhatsApp payment reminder messages for a small business.",
+          `You are a polite, effective business communication assistant drafting WhatsApp payment reminder messages for a small business. Always use "${currencySymbol}" for currency amounts (never "$").`,
         prompt:
           `Draft a concise WhatsApp reminder to send to a client regarding an invoice payment.\n` +
           `- Client Name: ${d.clientName}\n` +
@@ -108,7 +111,7 @@ export async function POST(req: Request) {
           `- Desired Tone: ${tone}\n\n` +
           `Guidelines:\n` +
           `- Length: 2 to 4 sentences.\n` +
-          `- Format naturally for WhatsApp (use *bold* on invoice number and amount if appropriate).\n` +
+          `- Format naturally for WhatsApp (use *bold* on invoice number and amount with ${currencySymbol} if appropriate, never "$").\n` +
           `- Ask clearly for the status, transaction reference, or estimated clearance date.\n` +
           `- Output ONLY the message text. Do not include subject lines, placeholders, or explanations.`,
       });
@@ -151,12 +154,12 @@ export async function POST(req: Request) {
       const { text } = await generateText({
         model: MODEL,
         instructions:
-          "You are a seasoned CFO conducting an overhead and SaaS subscription audit for a small business.",
+          `You are a seasoned CFO conducting an overhead and SaaS subscription audit for a small business. Always quote amounts with the "${currencySymbol}" symbol (never "$").`,
         prompt:
-          `Audit these active recurring expenses and subscriptions for potential cost cuts, duplicate software, and negotiation opportunities:\n` +
+          `Audit these active recurring expenses and subscriptions for potential cost cuts, duplicate software, and negotiation opportunities (all figures in ${currencySymbol}):\n` +
           JSON.stringify(subs, null, 2) + `\n\n` +
           `Provide:\n` +
-          `1. **Overhead Summary**: Total monthly and annual commitment, top category drains.\n` +
+          `1. **Overhead Summary**: Total monthly and annual commitment in ${currencySymbol}, top category drains.\n` +
           `2. **Potential Redundancies / Overlap**: Any tools that duplicate functionality or have cheaper alternatives.\n` +
           `3. **Immediate Pruning Actions**: 2-3 specific subscriptions to cancel, downgrade, or renegotiate.\n` +
           `4. **Negotiation Templates**: 1 ready-to-use email/message draft requesting a discount or annual tier concession for the largest tool.`,

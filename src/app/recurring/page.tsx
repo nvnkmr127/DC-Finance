@@ -118,6 +118,7 @@ export default function RecurringPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           mode: "audit_subscriptions",
+          currency: settings?.default_currency || "INR",
           subscriptions: rows.filter((r) => r.active).map((r) => ({
             name: r.name,
             category: r.category,
